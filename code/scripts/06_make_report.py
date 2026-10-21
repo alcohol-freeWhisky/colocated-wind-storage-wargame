@@ -27,7 +27,7 @@ REGIME_ORDER = ["R1", "R1_f", "R2", "R2_f", "R3a", "R3b", "R4a", "R4a_f", "R4b",
 
 def _fmt(value: Any, digits: int = 2) -> str:
     if value is None or pd.isna(value):
-        return "—"
+        return "n/a"
     if isinstance(value, (int, np.integer)):
         return f"{value:,}"
     return f"{float(value):,.{digits}f}"
@@ -249,7 +249,7 @@ def main() -> None:
                 regime, _fmt(row.objective, 0), _fmt(row.profit, 0),
                 _fmt(row.curtailment, 1), _fmt(row.throughput, 1),
                 _fmt(row.under_delivery, 1), _fmt(row.overflow, 1),
-                "—" if pd.isna(row.convergence) else f"{100 * row.convergence:.0f}%",
+                "n/a" if pd.isna(row.convergence) else f"{100 * row.convergence:.0f}%",
             ]
             for regime, row in regime_means.iterrows()
         ],
@@ -492,14 +492,14 @@ def main() -> None:
         f" (positive means the signal helps). Both gaps grow as the POI tightens; at κK = {_fmt(k_lo, 1)} the strategic gap is largest for the {top_strat_set} set and the information gap for the {top_info_set} set."
     )
     fig_gap_caption = (
-        f"*Finding: at the base storage design ({base_design_name}; configuration means over days), the strategic gap for the {hi_set}-correlation set "
+        f"*At the base storage design ({base_design_name}; configuration means over days), the strategic gap for the {hi_set}-correlation set "
         f"is {_fmt(cval('strategic_gap_pct', k_hi, hi_set), 2)} % of J_R1 at κK = {_fmt(k_hi, 1)} and {_fmt(cval('strategic_gap_pct', k_lo, hi_set), 2)} % at κK = {_fmt(k_lo, 1)}, "
         f"versus {_fmt(cval('strategic_gap_pct', k_hi, lo_set), 2)} % and {_fmt(cval('strategic_gap_pct', k_lo, lo_set), 2)} % for the {lo_set} set; "
         f"the information gap for the {hi_set} set goes from {_fmt(cval('info_gap_pct', k_hi, hi_set), 2)} % to {_fmt(cval('info_gap_pct', k_lo, hi_set), 2)} %, "
         f"and signal value from {_fmt(cval('signal_value_pct', k_hi, hi_set), 2)} % to {_fmt(cval('signal_value_pct', k_lo, hi_set), 2)} % (20 days, every 3rd day)." + fig_gap_extra + "*"
     )
     fig_viol_caption = (
-        f"*Finding: for the {hi_set}-correlation set at the base storage design, mean R2 attempted overflow rises from "
+        f"*For the {hi_set}-correlation set at the base storage design, mean R2 attempted overflow rises from "
         f"{_fmt(cval('attempted_overflow_mwh', k_hi, hi_set), 1)} MWh/day at κK = {_fmt(k_hi, 1)} to {_fmt(cval('attempted_overflow_mwh', k_lo, hi_set), 1)} MWh/day at κK = {_fmt(k_lo, 1)} "
         f"and mean under-delivery moves from {_fmt(cval('under_delivery_mwh', k_hi, hi_set), 1)} to {_fmt(cval('under_delivery_mwh', k_lo, hi_set), 1)} MWh/day "
         f"(the {lo_set} set: {_fmt(cval('attempted_overflow_mwh', k_lo, lo_set), 1)} and {_fmt(cval('under_delivery_mwh', k_lo, lo_set), 1)} MWh/day at κK = {_fmt(k_lo, 1)}); "
@@ -706,13 +706,13 @@ The configured window is {cfg['data']['window_start']} through {cfg['data']['win
 
 ![Wind correlation and selected sets]({figure_rel['wind_corr']})
 
-*Finding: the selected low, medium, and high sets have mean correlations {_fmt(corr_means['low'], 2)}, {_fmt(corr_means['medium'], 2)}, and {_fmt(corr_means['high'], 2)} (within the low set, pairwise ρ ranges from {_fmt(low_set['min_rho'], 2)} to {_fmt(low_set['max_rho'], 2)}), so the sensitivity grid spans materially different coincidence in wind availability.*
+*The selected low, medium, and high sets have mean correlations {_fmt(corr_means['low'], 2)}, {_fmt(corr_means['medium'], 2)}, and {_fmt(corr_means['high'], 2)} (within the low set, pairwise ρ ranges from {_fmt(low_set['min_rho'], 2)} to {_fmt(low_set['max_rho'], 2)}), so the sensitivity grid spans materially different coincidence in wind availability.*
 
 ![HB_WEST prices]({figure_rel['prices']})
 
-*Finding: DA and RT prices range from ${price_min:,.2f} to ${price_max:,.2f}/MWh, the largest forecast loss {'coincides' if worst_forecast['day'] == price_max_day else 'does not coincide'} with the window's price maximum, and across days the correlation between the daily forecast gap and the daily maximum RT price is r = {forecast_price_r:.2f}.*
+*DA and RT prices range from ${price_min:,.2f} to ${price_max:,.2f}/MWh, the largest forecast loss {'coincides' if worst_forecast['day'] == price_max_day else 'does not coincide'} with the window's price maximum, and across days the correlation between the daily forecast gap and the daily maximum RT price is r = {forecast_price_r:.2f}.*
 
-**Assumptions and sources.** [ASSUMPTIONS.md](../ASSUMPTIONS.md) records every source and status. Prices, wind, forecasts, awards, and resource metadata are observed; nameplate, storage size, efficiency, degradation cost, and monitor-noise regimes are calibrated; K, D, λ⁻ = {_fmt(lambda_minus, 0)} $/MWh, information structures, thresholds, and enforcement parameters are designed.
+[ASSUMPTIONS.md](../ASSUMPTIONS.md) records every source and status. Prices, wind, forecasts, awards, and resource metadata are observed; nameplate, storage size, efficiency, degradation cost, and monitor-noise regimes are calibrated; K, D, λ⁻ = {_fmt(lambda_minus, 0)} $/MWh, information structures, thresholds, and enforcement parameters are designed.
 
 {base_params_line}
 
@@ -728,7 +728,7 @@ The physical and strategic model follows [DESIGN.md §3–§4](../DESIGN.md). It
 
 {poa_table}
 
-Raw-profit comparisons, which omit the system shortage charge, are:
+Raw-profit comparisons omit the system shortage charge:
 
 {profit_gaps}
 
@@ -738,15 +738,15 @@ The strategic gap is small on a typical day but heavy-tailed: its mean is ${_fmt
 
 {r4a_paragraph}
 
-The central forecast gap dominates the other average losses: it averages ${_fmt(day_gaps['forecast_gap_central'].mean(), 0)}/day, or an average of {_fmt(day_gaps['forecast_gap_central_pct_r1'].mean(), 1)} % of daily J_R1, versus a median ${_fmt(day_gaps['forecast_gap_central'].median(), 0)}/day and {_fmt(day_gaps['forecast_gap_central_pct_r1'].median(), 1)} %. The worst day is {worst_forecast['day']}, with a ${_fmt(worst_forecast['forecast_gap_central'], 0)} gap and a maximum RT price of ${_fmt(worst_forecast_price, 2)}/MWh; the largest forecast loss {'coincides' if worst_forecast['day'] == price_max_day else 'does not coincide'} with the window's price maximum (on {price_max_day}). Across the {len(forecast_price)} days, the correlation between the daily forecast gap and the daily maximum RT price is r = {forecast_price_r:.2f}.
+The central forecast gap dominates the other average losses: it averages ${_fmt(day_gaps['forecast_gap_central'].mean(), 0)}/day, or {_fmt(day_gaps['forecast_gap_central_pct_r1'].mean(), 1)} % of daily J_R1 on average, versus a median ${_fmt(day_gaps['forecast_gap_central'].median(), 0)}/day and {_fmt(day_gaps['forecast_gap_central_pct_r1'].median(), 1)} %. The worst day is {worst_forecast['day']}, with a ${_fmt(worst_forecast['forecast_gap_central'], 0)} gap and a maximum RT price of ${_fmt(worst_forecast_price, 2)}/MWh; the largest forecast loss {'coincides' if worst_forecast['day'] == price_max_day else 'does not coincide'} with the window's price maximum (on {price_max_day}). Across the {len(forecast_price)} days, the correlation between the daily forecast gap and the daily maximum RT price is r = {forecast_price_r:.2f}.
 
 ![Daily system objective by regime]({figure_rel['regime_profit']})
 
-*Finding: {best_regime} has the highest mean J (${regime_means.loc[best_regime, 'objective']:,.0f}/day), {worst_regime} has the lowest (${regime_means.loc[worst_regime, 'objective']:,.0f}/day), and a few extreme days dominate the strategic-gap mean.*
+*{best_regime} has the highest mean J (${regime_means.loc[best_regime, 'objective']:,.0f}/day), {worst_regime} has the lowest (${regime_means.loc[worst_regime, 'objective']:,.0f}/day), and a few extreme days dominate the strategic-gap mean.*
 
 ![Illustrative dispatch trajectory]({figure_rel['trajectory']})
 
-*Finding: on {selected_day}, the objective spread among R1, R2, and R4b is ${_fmt(selected_spread, 0)}, on the day with the largest strategic gap in the window. Relative to R1, {sel_tp_text}, and {sel_ud_text}.*
+*On {selected_day}, the objective spread among R1, R2, and R4b is ${_fmt(selected_spread, 0)}, on the day with the largest strategic gap in the window. Relative to R1, {sel_tp_text}, and {sel_ud_text}.*
 
 ## Information-structure matrix
 
@@ -756,11 +756,11 @@ The central forecast gap dominates the other average losses: it averages ${_fmt(
 
 ![Information-structure matrix]({figure_rel['info_matrix']})
 
-*Finding: the lowest matrix cell in J is {matrix_min[0]} under {matrix_min[1]} foresight, while the perfect-to-forecast column change is much larger than the differences across coordination rows.*
+*The lowest matrix cell in J is {matrix_min[0]} under {matrix_min[1]} foresight, while the perfect-to-forecast column change is much larger than the differences across coordination rows.*
 
 ## Sensitivity
 
-{sensitivity_status} The grid has {len(sensitivity_configs)} κK-by-correlation-by-storage configurations. All gaps below use J and are computed from configuration means over days (mean J by regime, then ratios), not single-day extremes. Figures and the tables below use the base storage design ({base_design_name}) unless stated.
+{sensitivity_status} The grid has {len(sensitivity_configs)} κK-by-correlation-by-storage configurations. All gaps below use J and are computed from configuration means over days (mean J by regime, then ratios). Figures and the tables below use the base storage design ({base_design_name}) unless stated.
 
 {sensitivity_highlights}
 
@@ -784,11 +784,11 @@ Mean information gap (R2 − R4a, % of mean J_R1):
 
 ![Storage design comparison]({figure_rel['storage_design']})
 
-*Finding: configuration-mean PoA spans {_fmt(cm['PoA'].min(), 3)}–{_fmt(cm['PoA'].max(), 3)} over the grid and, at κK = {_fmt(base_k, 2)}, from {_fmt(poa_k.min(), 4)} ({poa_lo}) to {_fmt(poa_k.max(), 4)} ({poa_hi}), so storage design changes both efficiency and curtailment; {storage_text} (20 days, every 3rd day).*
+*Configuration-mean PoA spans {_fmt(cm['PoA'].min(), 3)}–{_fmt(cm['PoA'].max(), 3)} over the grid and, at κK = {_fmt(base_k, 2)}, from {_fmt(poa_k.min(), 4)} ({poa_lo}) to {_fmt(poa_k.max(), 4)} ({poa_hi}), so storage design changes both efficiency and curtailment; {storage_text} (20 days, every 3rd day).*
 
 ## Monitor calibration
 
-These are the real-data low, medium, and high σ regimes. The table reports both absolute thresholds and both withholding levels at δ = {_fmt(cfg['monitor']['delta'], 2)} and d = {_fmt(monitor_selected['d'].iloc[0], 0)}.
+The low, medium, and high σ regimes come from real data. Results are given for both absolute thresholds and both withholding levels at δ = {_fmt(cfg['monitor']['delta'], 2)} and d = {_fmt(monitor_selected['d'].iloc[0], 0)}.
 
 {monitor_markdown}
 
@@ -796,19 +796,19 @@ These are the real-data low, medium, and high σ regimes. The table reports both
 
 ![Empirical monitor ROC]({monitor_rel['roc']})
 
-*Finding: the ROC curves overlap substantially across calibrated regimes, so a threshold that suppresses false positives also misses a material share of small withholding. Empirical AUC at m = {_fmt(auc_m, 2)} of nameplate: {auc_text}.*
+*The ROC curves overlap substantially across calibrated regimes, so a threshold that suppresses false positives also misses a material share of small withholding. Empirical AUC at m = {_fmt(auc_m, 2)} of nameplate: {auc_text}.*
 
 ![Required fine versus noise]({monitor_rel['fine']})
 
-*Finding: required F*/g increases when q1 separates less from q0, making small withholding expensive to deter under noisier signals.*
+*Required F*/g increases when q1 separates less from q0, making small withholding expensive to deter under noisier signals.*
 
 ![Correction duration versus noise]({monitor_rel['duration']})
 
-*Finding: finite correction periods lengthen sharply when detection gain q1 − q0 is small; some low-detection combinations are not finitely deterrable on the plotted horizon (T_max = {t_max:,} periods); {inf_text}.*
+*Finite correction periods lengthen sharply when detection gain q1 − q0 is small; some low-detection combinations are not finitely deterrable on the plotted horizon (T_max = {t_max:,} periods); {inf_text}.*
 
 ## What we learned / what breaks
 
-- The mean strategic gap is an average of {_fmt(gap_means['strategic_gap_pct_r1'], 1)} % of daily J_R1, but its ${_fmt(day_gaps['strategic_gap'].median(), 0)} median and ${_fmt(day_gaps['strategic_gap'].max(), 0)} maximum show that an average alone is misleading.
+- The mean strategic gap is {_fmt(gap_means['strategic_gap_pct_r1'], 1)} % of daily J_R1, with a ${_fmt(day_gaps['strategic_gap'].median(), 0)} median and a ${_fmt(day_gaps['strategic_gap'].max(), 0)} maximum, so the mean is not representative of a typical day.
 - R4a beats the full-information Nash outcome on {len(r4a_better_days)} days; on those days it is associated with less throughput and less attempted shared-POI overflow, although over all days R4a's mean attempted overflow is {_fmt(overflow_all['R4a'], 1)} MWh versus {_fmt(overflow_all['R2'], 1)} MWh in R2.
 - Perfect foresight is worth an average of {_fmt(gap_means['forecast_gap_central_pct_r1'], 1)} % of daily J_R1, larger than the mean strategic and information effects.
 - Best-response regimes converge in {100 * convergence:.1f}% of evaluated base-day runs (converged requires residual ≤ tol and maximum unilateral gain ≤ $1); non-converged runs are not a tolerance artefact: over all R2/R3a/R3b day-runs the largest remaining unilateral gain is ${_fmt(max_gain_max, 2)}, i.e. {100 * max_gain_max / j_r1_mean:.2f} % of mean J_R1 (mean ${_fmt(max_gain_mean, 2)}, {100 * max_gain_mean / j_r1_mean:.3f} %). Convergence does not imply system optimality.
@@ -819,7 +819,7 @@ These are the real-data low, medium, and high σ regimes. The table reports both
 
 ## Limitations
 
-The base results cover {regimes['day'].nunique()} complete episodes in one spring window at one co-located site. Sensitivity: {sensitivity_status} The forecast-error (monitor) regimes rest on a rolling MIS snapshot (publications 2026-10-13 … 10-20 at system level; resource-level data for 2025-03-01 … 04-30), so the system-level noise is calibrated on a different period from the operating window. The model is price-taking at RT, uses deterministic COP and DA forecasts inside MPC, and does not yet model two-settlement bidding, endogenous prices, outages, causal intent, or attacks.
+The base results cover {regimes['day'].nunique()} complete episodes in one spring window at one co-located site. {sensitivity_status} The forecast-error (monitor) regimes rest on a rolling MIS snapshot (publications 2026-10-13 … 10-20 at system level; resource-level data for 2025-03-01 … 04-30), so the system-level noise is calibrated on a different period from the operating window. The model is price-taking at RT, uses deterministic COP and DA forecasts inside MPC, and does not yet model two-settlement bidding, endogenous prices, outages, causal intent, or attacks.
 
 ## Post-Workshop-1 roadmap
 

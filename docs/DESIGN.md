@@ -22,7 +22,7 @@ Everything here was decided by the project lead; implementers should follow it a
 │   │   └── experiments/      run_regimes.py, sensitivity.py, metrics.py, plots.py
 │   └── scripts/              numbered CLI entry points 01_download_raw.py ... 06_make_report.py
 ├── data/
-│   ├── raw/                  untouched downloads (ercot/, eia/, nrel/) — never edited by hand
+│   ├── raw/                  untouched downloads (ercot/, eia/, nrel/); never edited by hand
 │   ├── interim/              per-day extracted tables (parquet)
 │   └── processed/            the common dataset (see §2) + data/processed/README.md provenance
 ├── results/
@@ -44,20 +44,20 @@ Python: `.venv/bin/python` (3.13). Libraries: numpy, pandas, scipy, cvxpy (defau
 |---|---|---|---|
 | `pi_DA[t]` | ERCOT Historical DAM Settlement Point Prices (NP4-180-ER) | `gridstatus.Ercot().get_dam_spp(year)` → cols `Interval Start, Location, Location Type, Market, SPP` | use `Location == "HB_WEST"` (wind sites are in West zone); hourly |
 | `pi_RT[t]` | ERCOT Historical RTM SPP (NP6-785-ER) | `get_rtm_spp(year)` → 15-min rows | average the four 15-min SPPs to hourly |
-| `W[i,t]` (available wind, MW) | ERCOT 60-Day SCED Disclosure (NP3-965-ER), table `sced_gen_resource` | `get_60_day_sced_disclosure("YYYY-MM-DD")["sced_gen_resource"]`; date = **operating day**; keep `Resource Type == "WIND"`; cols `SCED Timestamp, Resource Name, QSE, DME, HSL, Base Point, Telemetered Net Output , Output Schedule, Telemetered Resource Status` (note trailing space in `Telemetered Net Output `) | 5-min rows → hourly mean. `HSL` = available power (what the wind could produce) ⇒ this is W. `Base Point` = dispatched; `HSL - Base Point` = observed curtailment (diagnostic only). |
+| `W[i,t]` (available wind, MW) | ERCOT 60-Day SCED Disclosure (NP3-965-ER), table `sced_gen_resource` | `get_60_day_sced_disclosure("YYYY-MM-DD")["sced_gen_resource"]`; date = operating day; keep `Resource Type == "WIND"`; cols `SCED Timestamp, Resource Name, QSE, DME, HSL, Base Point, Telemetered Net Output , Output Schedule, Telemetered Resource Status` (note trailing space in `Telemetered Net Output `) | 5-min rows → hourly mean. `HSL` = available power (what the wind could produce) ⇒ this is W. `Base Point` = dispatched; `HSL - Base Point` = observed curtailment (diagnostic only). |
 | realized output | same table, `Telemetered Net Output ` | hourly mean | used for monitor calibration (actual vs. forecast) |
 | `What[i,t]` (resource-level forecast) | ERCOT 60-Day COP Adjustment Period Snapshot | `get_cop_adjustment_period_snapshot_60_day(date)` → cols `Interval Start, Resource Name, QSE, Status, High Sustained Limit, ...` | QSE's own day-ahead-ish availability forecast of HSL; hourly |
-| `b[i,t]` (DA award) | ERCOT 60-Day DAM Disclosure (NP3-966-ER), `dam_gen_resource` | `get_60_day_dam_disclosure(date)["dam_gen_resource"]`, cols `Interval Start, Resource Name, Resource Type, HSL, Awarded Quantity, Settlement Point Name, Energy Settlement Point Price` | most wind has no DAM award (NaN) → **baseline rule**: `b = Awarded Quantity` if > 0 else `b = What` (COP HSL). Store both. |
+| `b[i,t]` (DA award) | ERCOT 60-Day DAM Disclosure (NP3-966-ER), `dam_gen_resource` | `get_60_day_dam_disclosure(date)["dam_gen_resource"]`, cols `Interval Start, Resource Name, Resource Type, HSL, Awarded Quantity, Settlement Point Name, Energy Settlement Point Price` | most wind has no DAM award (NaN) → baseline rule: `b = Awarded Quantity` if > 0 else `b = What` (COP HSL). Store both. |
 | forecast-error regimes (system/regional) | ERCOT Wind Power Production – Hourly Averaged Actual and Forecasted Values (NP4-732-CD) and by Geographical Region (NP4-742-CD) | MIS keeps only a rolling ~8-day window; snapshot already saved in `data/raw/ercot/wind_forecast_hourly/*.parquet` and `.../wind_forecast_region_hourly/*.parquet` (2026-10-13..20, one file per publish day, 24 publications/day, each 216 hourly rows: 48 h actual GEN + 168 h STWPF/WGRPP forecast) | build error-vs-horizon table: for each publication, horizon h = Interval Start − Publish Time; error = (STWPF − GEN)/HSL_SYSTEM_WIDE using the GEN that appears in later publications for the same interval. Columns: `GEN SYSTEM WIDE, STWPF SYSTEM WIDE, WGRPP SYSTEM WIDE, HSL SYSTEM WIDE`, and `GEN/STWPF/WGRPP LZ WEST` etc. |
 | asset metadata | EIA-860 2023 | `https://www.eia.gov/electricity/data/eia860/archive/xls/eia8602023.zip` (verified 206 on range request). Sheets: `3_2_Wind_Y2023.xlsx`, `3_4_Energy_Storage_Y2023.xlsx`, `3_1_Generator_Y2023.xlsx` | TX wind nameplate for the selected plant (Horse Hollow, Callahan/Taylor County); distribution of BESS duration (MWh/MW) and BESS-to-wind power ratio for co-located TX hybrids (same Plant Code having both wind and storage) |
 | battery tech params | NREL ATB 2024 utility-scale battery (cite), no download needed | round-trip efficiency 85 % ⇒ η_c = η_d = sqrt(0.85) ≈ 0.922; degradation/cycling cost C_deg = 10 $/MWh discharged (assumption, sensitivity 5–20) | put values + citation in `config/base.yaml`, flagged `source: calibrated_from_observed_colocated_bess` |
 
-**Operating-day window**: 2025-03-01 … 2025-04-30 (61 days; spring = high wind, frequent West-hub negative prices, strong price volatility). Prices for year 2025.
+Operating-day window: 2025-03-01 … 2025-04-30 (61 days; spring = high wind, frequent West-hub negative prices, strong price volatility). Prices for year 2025.
 
-**Wind resource pool** (all 5-min SCED rows for these resources are kept in interim data). Real multi-unit plants whose units physically share one interconnection, registered partly under different QSEs — this is the empirical justification for "independently controlled co-located resources":
+Wind resource pool (all 5-min SCED rows for these resources are kept in interim data). Real multi-unit plants whose units physically share one interconnection, registered partly under different QSEs. This is the empirical justification for "independently controlled co-located resources":
 
-- **Primary site (N = 5 agents, decided 2026-10-21): Anchor Wind** — `ANCHOR_WIND1..5` (DME YENELT, Enel; ≈262 MW: sum of p99.5 nameplates over the window; 245.1 MW is the 2025-04-15 COP HSL used for the p_ratio calibration), a real wind plant with two observed co-located batteries `ANCHOR_BESS1/2` (71.5 MW / 113 MWh from the ERCOT COP snapshot) sharing the same POI; battery sizing in config is calibrated to this. Alternative sites in `config/scenarios/`: Vortex (4 units + observed 121.8 MW / 184 MWh BESS) and Horse Hollow (below, no observed storage).
-- Secondary site: Horse Hollow — `HHGT_HHOLLOW1, HHGT_HHOLLOW2, HHGT_HHOLLOW3, HHGT_HHOLLOW4, HHGT_CALLAHAN` (DME YHHGT; QSEs QFPLE1/QFPL14/QFPLE3; ≈806 MW HSL max on 2025-04-15).
+- Primary site (N = 5 agents, decided 2026-10-21): Anchor Wind. `ANCHOR_WIND1..5` (DME YENELT, Enel; ≈262 MW: sum of p99.5 nameplates over the window; 245.1 MW is the 2025-04-15 COP HSL used for the p_ratio calibration), a real wind plant with two observed co-located batteries `ANCHOR_BESS1/2` (71.5 MW / 113 MWh from the ERCOT COP snapshot) sharing the same POI; battery sizing in config is calibrated to this. Alternative sites in `config/scenarios/`: Vortex (4 units + observed 121.8 MW / 184 MWh BESS) and Horse Hollow (below, no observed storage).
+- Secondary site: Horse Hollow. `HHGT_HHOLLOW1, HHGT_HHOLLOW2, HHGT_HHOLLOW3, HHGT_HHOLLOW4, HHGT_CALLAHAN` (DME YHHGT; QSEs QFPLE1/QFPL14/QFPLE3; ≈806 MW HSL max on 2025-04-15).
 - Correlation pool (for ρ sensitivity, mixing units from different sites): `CAPRIDGE_CR1..CR3`, `ANCHOR_WIND1..5`, `VERAWIND_UNIT1..5`, `WHMESA_UNIT1, WHMESA_UNIT2_23, WHMESA_UNIT2_28, WHMESA_UNIT3_23, WHMESA_UNIT3_28`, `VORTEX_WIND1..4`, `LACY_CRK_UNIT1..4`, `CANYONWD_UNIT1..6`.
 - Resource nameplate `N_i` := 99.5th percentile of hourly HSL over the window (robust to telemetry spikes); store also max.
 
@@ -92,7 +92,7 @@ Settlement price for injections: `pi[t] = pi_RT[t]` (agents are price takers at 
 Agent payoff: `U_i = Σ_t [ pi[t]*q[i,t] - C_deg*d[i,t] ]`, coordinated variant
 `U_i_coord = U_i - beta_minus[i]*lambda_minus*Vminus[t] - beta_plus[i]*lambda_plus*Vplus[t]`, `beta_i = N_i/Σ N` by default (config: `"capacity_share" | "equal" | "full"`).
 
-**Physical realization layer** (`solvers/realize.py`): whatever the agents *plan*, the POI controller cannot export more than K. Given planned q, realized injection `q_real = q - share_i * Vplus` with pro-rata (by q⁺) curtailment, SoC is re-simulated with the realized r (extra curtailment), and realized profit uses q_real. Report both *planned* violations (what the strategic layer attempted) and *realized* quantities. The central solution has Vplus = 0 by construction (hard constraint).
+Physical realization layer (`solvers/realize.py`): whatever the agents *plan*, the POI controller cannot export more than K. Given planned q, realized injection `q_real = q - share_i * Vplus` with pro-rata (by q⁺) curtailment, SoC is re-simulated with the realized r (extra curtailment), and realized profit uses q_real. Report both *planned* violations (what the strategic layer attempted) and *realized* quantities. The central solution has Vplus = 0 by construction (hard constraint).
 
 ## 4. Operating regimes (Part I, Workshop 1 scope)
 
@@ -100,11 +100,11 @@ Agent payoff: `U_i = Σ_t [ pi[t]*q[i,t] - C_deg*d[i,t] ]`, coordinated variant
 |---|---|---|---|
 | R1 | centralized oracle | full state, perfect foresight over the episode | one LP, hard `Q ≤ K`, soft D with lambda_minus |
 | R1_f | forecast centralized | full state across agents; realised current-hour wind/RT price and COP-wind/DA-price forecasts thereafter | receding-horizon central LP over `t..T-1`; execute hour `t`, realize, and re-plan; the end-of-episode SoC target is unchanged |
-| R2 | full-information selfish game | each agent sees everything (all W, SoC, prices) and others' current plans | Gauss–Seidel best response: agent i solves its LP given q_{-i}, payoff U_i_coord with `beta_plus` = **capacity share of λ⁺ penalty** and `beta_minus` = capacity share; iterate until max |Δq| < 1e-3·ΣN or 50 sweeps; damping 0.5. Also verify the fixed point is a Nash eq. by one final unilateral-deviation check (report max gain). Record non-convergence. |
+| R2 | full-information selfish game | each agent sees everything (all W, SoC, prices) and others' current plans | Gauss–Seidel best response: agent i solves its LP given q_{-i}, payoff U_i_coord with `beta_plus` = capacity share of λ⁺ penalty and `beta_minus` = capacity share; iterate until max |Δq| < 1e-3·ΣN or 50 sweeps; damping 0.5. Also verify the fixed point is a Nash eq. by one final unilateral-deviation check (report max gain). Record non-convergence. |
 | R2_f | forecast full-information game | all agents see one another's plans; current-hour own wind/RT price are realised and future own wind/price use COP/DA forecasts | re-run the remaining-horizon Gauss–Seidel game each hour, warm-started from the prior plan tail; execute and realize hour `t`; log sweeps by hour |
-| R3 | coordinated decentralized game | as R2 plus a coordinator broadcast | R2 but `beta = full` (each agent internalizes the whole shared penalty) **and** a headroom price: the coordinator adds to each agent's objective `- mu[t]*q[i,t]` where `mu[t]` is the dual of `Q ≤ K` from R1 (price-based coordination). Report both sub-variants R3a (penalty only), R3b (penalty + dual price). |
-| R4a | limited information — aggregate | agent i sees own state and the aggregate signal `headroom[t-1] = K - Q[t-1]`; by default, own future RT prices and W are perfect (`mpc.price_info = wind_info = perfect`) | receding-horizon MPC each hour: own LP over remaining horizon with a private POI budget `q[i,t] ≤ max(0, headroom[t-1]) + q_real[i,t-1]`-style estimate (persistence of last headroom) |
-| R4b | limited information — local | as R4a but **no** aggregate signal; agent assumes a fixed POI budget `K * N_i/ΣN` | same MPC |
+| R3 | coordinated decentralized game | as R2 plus a coordinator broadcast | R2 but `beta = full` (each agent internalizes the whole shared penalty) and a headroom price: the coordinator adds to each agent's objective `- mu[t]*q[i,t]` where `mu[t]` is the dual of `Q ≤ K` from R1 (price-based coordination). Report both sub-variants R3a (penalty only), R3b (penalty + dual price). |
+| R4a | limited information, aggregate | agent i sees own state and the aggregate signal `headroom[t-1] = K - Q[t-1]`; by default, own future RT prices and W are perfect (`mpc.price_info = wind_info = perfect`) | receding-horizon MPC each hour: own LP over remaining horizon with a private POI budget `q[i,t] ≤ max(0, headroom[t-1]) + q_real[i,t-1]`-style estimate (persistence of last headroom) |
+| R4b | limited information, local | as R4a but no aggregate signal; agent assumes a fixed POI budget `K * N_i/ΣN` | same MPC |
 | R4a_f | forecast-information aggregate | R4a with DA prices for future RT prices and own COP HSL for future W; current-hour RT price and W are realized | same MPC |
 | R4b_f | forecast-information local | R4b with the same forecast information as R4a_f | same MPC |
 
@@ -121,12 +121,12 @@ Deterrence: `F_star = g*(delta**(-d) - q1)/Delta_q` (one-shot deviation, gain g,
 
 ## 6. Experiments & outputs (`code/scripts/`)
 
-1. `01_download_raw.py` — prices (2025), SCED/DAM/COP for every day in the window (skip if file exists), EIA-860 zip; writes per-day parquet into `data/interim/` (only WIND rows + the needed columns) and logs failures in `results/logs/download.log`. Must be resumable.
-2. `02_build_dataset.py` — builds every table in §2 and `data/processed/README.md`.
-3. `03_run_regimes.py` — base case (Anchor Wind, 5 agents, defaults) for all days: all regimes → `results/tables/regimes_by_day.csv`, `regimes_summary.csv`, per-day trajectories for a few illustrative days in `results/tables/trajectories/`.
-4. `04_sensitivity.py` — grid over kappa_K × agent sets (3 sets chosen from the pool at low / medium / high mean pairwise ρ, documented in `results/tables/agent_sets.csv`) × storage designs, on a 20-day subset (every 3rd day) → `results/tables/sensitivity.csv`.
-5. `05_monitor.py` — §5 outputs → `results/tables/monitor_*.csv`, figures.
-6. `06_make_report.py` — assembles `docs/workshop1/report.md` with the headline tables and figure links; figures via `experiments/plots.py` (matplotlib, one figure per file, labelled axes with units).
+1. `01_download_raw.py`: prices (2025), SCED/DAM/COP for every day in the window (skip if file exists), EIA-860 zip; writes per-day parquet into `data/interim/` (only WIND rows + the needed columns) and logs failures in `results/logs/download.log`. Must be resumable.
+2. `02_build_dataset.py`: builds every table in §2 and `data/processed/README.md`.
+3. `03_run_regimes.py`: base case (Anchor Wind, 5 agents, defaults) for all days: all regimes → `results/tables/regimes_by_day.csv`, `regimes_summary.csv`, per-day trajectories for a few illustrative days in `results/tables/trajectories/`.
+4. `04_sensitivity.py`: grid over kappa_K × agent sets (3 sets chosen from the pool at low / medium / high mean pairwise ρ, documented in `results/tables/agent_sets.csv`) × storage designs, on a 20-day subset (every 3rd day) → `results/tables/sensitivity.csv`.
+5. `05_monitor.py`: §5 outputs → `results/tables/monitor_*.csv`, figures.
+6. `06_make_report.py`: assembles `docs/workshop1/report.md` with the headline tables and figure links; figures via `experiments/plots.py` (matplotlib, one figure per file, labelled axes with units).
 
 Reproducibility: every script accepts `--config config/base.yaml` and optional `--scenario`; random seeds fixed; each results table gets a sibling `.meta.json` with git hash, timestamp, config hash.
 

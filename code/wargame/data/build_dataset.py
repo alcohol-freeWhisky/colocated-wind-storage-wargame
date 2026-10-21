@@ -307,11 +307,11 @@ same instant in UTC.
 | `forecast_error_resource.parquet` | COP HSL versus SCED HSL, `cap_proxy` (resource nameplate), and nameplate-normalized error | Empirical summary |
 | `eia860_summary.json`, `eia860_tx_storage.csv` | Horse Hollow wind and Texas battery/hybrid calibration summaries; EIA-860 2023 | Empirical summary |
 
-Episodes are views of these tables, constructed by operating day and agent set;
-they are not separately materialized here. Battery sizing, shared POI limit `K`,
+Episodes are views of these tables, constructed by operating day and agent set,
+and are not materialized as files. Battery sizing, shared POI limit `K`,
 minimum delivery `D_t`, information regimes, monitoring thresholds, sanction
-duration, and attack type are designed wargame variables from the configuration,
-not historical observations.
+duration, and attack type are designed wargame variables taken from the
+configuration.
 """
     (output / "README.md").write_text(text, encoding="utf-8")
 

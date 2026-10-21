@@ -1,6 +1,6 @@
 # Strategic Coordination, Learning, and Monitoring in Co-Located Wind–Storage Systems
 
-**A Computational Wargame** — MIT 6.974, Fall 2026
+A Computational Wargame, MIT 6.974, Fall 2026
 
 Team: Nicolás Acevedo Villena, Subham Saha, Ziqi Wei
 
@@ -80,7 +80,7 @@ python code/scripts/06_make_report.py   --config config/base.yaml   # < 1 min
 
 The full parameter-by-parameter record is in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md); the schema of each processed file is in [data/processed/README.md](data/processed/README.md).
 
-**Note:** ERCOT keeps the hourly wind-forecast reports (NP4-732-CD / NP4-742-CD) on MIS for only about 8 days. The system-level snapshot used here (publications 2026-10-13 to 2026-10-20) is committed under `data/raw/ercot/wind_forecast_*`. Re-running step 01 adds newer publications without deleting the snapshot.
+Note: ERCOT keeps the hourly wind-forecast reports (NP4-732-CD / NP4-742-CD) on MIS for only about 8 days. The system-level snapshot used here (publications 2026-10-13 to 2026-10-20) is committed under `data/raw/ercot/wind_forecast_*`. Re-running step 01 adds newer publications without deleting the snapshot.
 
 ## Status
 
@@ -101,10 +101,10 @@ Workshop 1 deliverables are complete; Parts II and III beyond the preliminary mo
 
 Full references (R1–R14) are in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md#references).
 
-- ERCOT DAM/RTM hub prices, NP4-180-ER and NP6-785-ER (via `gridstatus`) — R1.
-- ERCOT 60-Day SCED (NP3-965-ER), DAM (NP3-966-ER) and COP Adjustment Period disclosures — R2.
-- ERCOT wind production and forecasts, NP4-732-CD and NP4-742-CD — R3.
-- U.S. EIA, Form EIA-860 (2023 release) — R4.
-- LBNL, *Hybrid Power Plants: Status of Operating and Proposed Plants, 2025 Data Update* (copy in `docs/references/`) — R6.
-- NREL Annual Technology Baseline, utility-scale battery storage — R7.
-- Battery degradation, CAISO hybrid resources, ERCOT Protocols and VOLL references — R8–R13.
+- R1: ERCOT DAM/RTM hub prices, NP4-180-ER and NP6-785-ER (via `gridstatus`).
+- R2: ERCOT 60-Day SCED (NP3-965-ER), DAM (NP3-966-ER) and COP Adjustment Period disclosures.
+- R3: ERCOT wind production and forecasts, NP4-732-CD and NP4-742-CD.
+- R4: U.S. EIA, Form EIA-860 (2023 release).
+- R6: LBNL, *Hybrid Power Plants: Status of Operating and Proposed Plants, 2025 Data Update* (copy in `docs/references/`).
+- R7: NREL Annual Technology Baseline, utility-scale battery storage.
+- R8–R13: Battery degradation, CAISO hybrid resources, ERCOT Protocols and VOLL references.

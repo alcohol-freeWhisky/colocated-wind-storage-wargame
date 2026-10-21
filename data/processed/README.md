@@ -1,6 +1,6 @@
 # Processed data
 
-Built at `2026-10-21T03:40:27.424732+00:00` from public ERCOT and EIA source reports. Latest local
+Built at `2026-10-21T04:53:15.135799+00:00` from public ERCOT and EIA source reports. Latest local
 source-cache modification (download timestamp): `2026-10-21T03:36:19.709585+00:00`. All interval
 timestamps are timezone-aware `US/Central`; `t_utc`/`interval_start_utc` is the
 same instant in UTC.
@@ -16,8 +16,8 @@ same instant in UTC.
 | `forecast_error_resource.parquet` | COP HSL versus SCED HSL, `cap_proxy` (resource nameplate), and nameplate-normalized error | Empirical summary |
 | `eia860_summary.json`, `eia860_tx_storage.csv` | Horse Hollow wind and Texas battery/hybrid calibration summaries; EIA-860 2023 | Empirical summary |
 
-Episodes are views of these tables, constructed by operating day and agent set;
-they are not separately materialized here. Battery sizing, shared POI limit `K`,
+Episodes are views of these tables, constructed by operating day and agent set,
+and are not materialized as files. Battery sizing, shared POI limit `K`,
 minimum delivery `D_t`, information regimes, monitoring thresholds, sanction
-duration, and attack type are designed wargame variables from the configuration,
-not historical observations.
+duration, and attack type are designed wargame variables taken from the
+configuration.
