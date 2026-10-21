@@ -1,0 +1,16 @@
+{
+  "git_hash": null,
+  "created_utc": "2026-10-21T04:10:17.626923+00:00",
+  "config_sha256": "5b5d6724ecf4c5ffddb99558dca002db014cf6deaa19fd09748b878fb6f82def",
+  "runtime_s": 134.40771720791236,
+  "rows": 4,
+  "workers": 4,
+  "requested_days": null,
+  "agents": [
+    "ANCHOR_WIND1",
+    "ANCHOR_WIND2",
+    "ANCHOR_WIND3",
+    "ANCHOR_WIND4",
+    "ANCHOR_WIND5"
+  ]
+}

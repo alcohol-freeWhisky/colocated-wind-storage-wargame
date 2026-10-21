@@ -1,0 +1,9 @@
+{
+  "git_hash": null,
+  "created_utc": "2026-10-21T04:10:17.717950+00:00",
+  "config_sha256": "5b5d6724ecf4c5ffddb99558dca002db014cf6deaa19fd09748b878fb6f82def",
+  "runtime_s": 134.40771720791236,
+  "rows": 120,
+  "day": "2025-03-18",
+  "regime": "R2_f"
+}

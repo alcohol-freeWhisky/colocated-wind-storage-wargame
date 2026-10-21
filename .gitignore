@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ipynb_checkpoints/
+data/raw/**/*.zip
+data/raw/**/*.csv
+data/raw/**/*.xlsx
+data/interim/
+*.log
+.DS_Store
+*.egg-info/
+data/raw/eia/eia8602023/

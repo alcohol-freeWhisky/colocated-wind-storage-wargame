@@ -1,0 +1,7 @@
+# Alternative primary site: Vortex (4 wind units + observed VORTEX_BESS1 121.8 MW / 184 MWh)
+data:
+  primary_site: Vortex
+  primary_agents: [VORTEX_WIND1, VORTEX_WIND2, VORTEX_WIND3, VORTEX_WIND4]
+battery:
+  p_ratio: 0.37
+  duration_h: 1.5

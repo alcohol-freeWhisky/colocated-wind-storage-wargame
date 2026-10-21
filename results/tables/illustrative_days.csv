@@ -1,0 +1,5 @@
+role,day,selection_basis,selection_value
+highest_price,2025-04-07,mean_price_usd_per_mwh,145.66114583333334
+highest_wind,2025-03-18,wind_mwh,5790.349999999999
+median,2025-04-03,system_objective,55692.50736055013
+largest_strategic_gap,2025-04-26,strategic_gap,9588.181568670909

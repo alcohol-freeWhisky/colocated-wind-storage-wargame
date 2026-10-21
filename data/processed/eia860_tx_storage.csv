@@ -1,0 +1,5 @@
+plant_code,plant_name,wind_power_mw,storage_power_mw,storage_energy_mwh,storage_to_wind_power_ratio
+56961,Notrees Windpower Hybrid,152.5,36.0,13.6,0.2360655737704918
+56981,Pyron Wind Farm LLC Hybrid,249.0,9.9,9.9,0.03975903614457831
+56984,Inadale Wind Farm LLC Hybrid,197.0,9.9,9.9,0.050253807106598984
+62562,"High Lonesome Wind Power, LLC Hybrid",499.5,51.1,81.0,0.1023023023023023

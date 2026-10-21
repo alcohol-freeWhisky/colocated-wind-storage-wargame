@@ -1,0 +1,370 @@
+\documentclass[10pt]{article}
+
+\usepackage[margin=0.72in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb,booktabs}
+\usepackage{enumitem}
+\usepackage{microtype}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.34em}
+\setlist[itemize]{leftmargin=1.25em,itemsep=0.12em,topsep=0.18em}
+\setlist[enumerate]{leftmargin=1.35em,itemsep=0.12em,topsep=0.18em}
+
+\title{\vspace{-1.3em}
+\textbf{Strategic Coordination, Learning, and Monitoring in Co-Located Wind--Storage Systems}\\
+\large A Computational Wargame
+\vspace{-0.5em}}
+\author{Nicol\'as Acevedo Villena \and Subham Saha \and Ziqi Wei}
+\date{Fall 2026}
+
+\begin{document}
+\maketitle
+\vspace{-1.2em}
+
+\section*{1. Motivation and Literature Gap}
+
+Co-located renewable generation and battery energy storage systems (BESS) are increasingly operated as hybrid resources, while some markets also allow multiple separately participating resources to share a common point of interconnection. This creates a strategic coordination problem: independently controlled wind--storage operators may each make individually profitable dispatch decisions, yet their actions interact through a shared physical export limit and common reliability or market-delivery requirements.
+
+Existing storage and electricity-market studies already show that storage owners can behave strategically, and recent work has begun to study decentralized coordination using multi-agent reinforcement learning (MARL). MARLEM, for example, compares centralized, centralized-training/decentralized-execution (CTDE), and fully decentralized learning in local energy markets. We therefore do not treat ``multi-agent storage'' or MARL alone as the novelty. Our focus is the interaction among independently controlled \emph{co-located wind--storage resources} that share a physical interconnection bottleneck, have heterogeneous weather-dependent operating states, and may observe only partial information about the other operators.
+
+A separate literature studies strategic market behavior and monitoring. Market monitors face an inference problem: an observed deviation may reflect deliberate behavior, but it may also result from legitimate uncertainty. This issue is particularly relevant for wind resources, where realized availability can deviate substantially from forecasts. We therefore add a monitoring layer that distinguishes strategic under-delivery from weather-driven error and compares one-shot monetary penalties with finite-duration correction policies inspired by repeated and inspection games.
+
+The project is organized as three increasingly difficult layers:
+\[
+\boxed{
+\text{strategic decentralized operation}
+\rightarrow
+\text{limited information and MARL}
+\rightarrow
+\text{monitoring, enforcement, and resilience}.
+}
+\]
+The contribution is to use the same physically grounded co-located wind--storage environment to isolate the effects of self-interest, information availability, adaptive learning, and imperfect monitoring.
+
+\section*{2. Open-Access Data and Scenario Preparation}
+
+The project will use public market and resource data rather than the synthetic single-profile wind input used in the earlier prototype. The empirical layer will be separated from the experimental wargame layer.
+
+\textbf{ERCOT market and resource data.}
+We will use ERCOT Historical Day-Ahead Market (DAM) and Real-Time Market (RTM) hub prices for market settlement variables. The ERCOT 60-Day DAM Disclosure contains resource-level generation data, energy offers, and awards, which can be used to define day-ahead awards or baseline delivery quantities. The ERCOT 60-Day SCED Disclosure contains resource-level SCED data and settlement-metered net energy, providing realized operating behavior. We will select approximately 3--5 wind resources with overlapping time coverage and construct
+\[
+W_{i,t}, \qquad i=1,\ldots,N,
+\]
+directly from observed resource-level output.
+
+\textbf{Wind forecast uncertainty.}
+ERCOT publishes system-wide and regional hourly wind forecasts, including STWPF and WGRPP, as well as forecasts by model. These data will be used to estimate empirical forecast-error distributions and monitoring-noise regimes. Regional forecast data will be the baseline; NOAA HRRR can be added later if site-specific forecast information becomes necessary.
+
+\textbf{Fixed asset characteristics.}
+Battery capacities and power ratings will be treated as fixed physical parameters rather than strategic investment decisions. EIA Form 860 can be used to identify realistic generator/storage scales, while NREL ATB and public battery-technology sources can be used to calibrate efficiency, degradation cost, and plausible fixed storage durations. We will test a small set of fixed system designs as resilience scenarios, not as a capacity-expansion problem.
+
+\textbf{Experimental variables.}
+Some quantities are intentionally wargame parameters rather than historical observations. These include the shared point-of-interconnection limit $K$, the information available to each agent, monitoring thresholds, sanction duration, and adversarial disruptions. We will clearly distinguish empirical inputs from designed stress-test variables.
+
+The common processed dataset will contain, at minimum,
+\[
+\left\{
+\pi_t^{DA},
+\pi_t^{RT},
+W_{i,t},
+\widehat W_{i,t},
+b_{i,t},
+N_i
+\right\}_{i=1}^{N},
+\]
+where $b_{i,t}$ is a day-ahead award or baseline expected delivery. Full-state trajectories will then be masked to create global, aggregate-information, and local-information environments without requiring separate raw datasets.
+
+\section*{3. Physical and Strategic Operating Model}
+
+Each agent $i$ owns a wind resource and a co-located battery with fixed energy capacity $E_i$ and power rating $P_i$. At time $t$, agent $i$ chooses charging $c_{i,t}$, discharging $d_{i,t}$, and curtailment $r_{i,t}$. Net injection is
+\[
+q_{i,t}=W_{i,t}-r_{i,t}-c_{i,t}+d_{i,t},
+\]
+with battery dynamics
+\[
+E^{\mathrm{soc}}_{i,t+1}
+=
+E^{\mathrm{soc}}_{i,t}
++
+\left(
+\eta_c c_{i,t}
+-\frac{d_{i,t}}{\eta_d}
+\right)\Delta t,
+\]
+and
+\[
+0\le E^{\mathrm{soc}}_{i,t}\le E_i,
+\qquad
+0\le c_{i,t},d_{i,t}\le P_i.
+\]
+
+All agents share a common interconnection:
+\[
+Q_t=\sum_i q_{i,t}.
+\]
+The desired operating envelope is
+\[
+D_t\le Q_t\le K,
+\]
+where $D_t$ is a minimum aggregate delivery or market commitment and $K$ is the shared point-of-interconnection limit.
+
+To allow coordination failures to appear in the game, decentralized experiments use soft violations
+\[
+V_t^-=[D_t-Q_t]^+,
+\qquad
+V_t^+=[Q_t-K]^+.
+\]
+
+The baseline payoff of agent $i$ is
+\[
+U_i
+=
+\sum_t
+\left[
+\pi_t q_{i,t}
+-
+C_i^{\mathrm{deg}}d_{i,t}
+\right]\Delta t.
+\]
+A coordination mechanism can instead expose agents to part of the shared system cost:
+\[
+U_i^{\mathrm{coord}}
+=
+U_i
+-
+\beta_i^-\lambda_t^-V_t^-
+-
+\beta_i^+\lambda_t^+V_t^+.
+\]
+This gives a direct way to study when individually rational operation creates synchronized charging/discharging or shared reliability violations, and whether simple incentives or aggregate signals are sufficient to improve coordination.
+
+\section*{4. Research Questions and Layered Wargame}
+
+The project contains three connected parts.
+
+\subsection*{Part I: Strategic Operation and Information}
+
+\textbf{RQ1: How does decentralized self-interested operation differ from centralized coordination, and how much additional loss is caused by limited information?}
+
+We compare four operating regimes:
+
+\begin{enumerate}
+    \item \textbf{Centralized oracle:} one controller observes the full state and jointly dispatches all wind--storage resources.
+    \item \textbf{Full-information decentralized game:} each operator maximizes its own payoff while observing the global state and anticipating the actions of the others. We will use a Nash or generalized Nash formulation depending on whether the shared POI requirement is represented as a hard coupled constraint or a soft system penalty.
+    \item \textbf{Coordinated decentralized game:} agents remain independent but receive aggregate signals and/or shared shortage and congestion penalties.
+    \item \textbf{Limited-information decentralized game:} each agent observes only its own wind, state of charge, prices, and possibly one aggregate signal such as remaining POI headroom.
+\end{enumerate}
+
+This separates
+\[
+J^{\mathrm{central}}-J^{\mathrm{GNE}}
+\]
+as the \textbf{strategic decentralization gap}, and
+\[
+J^{\mathrm{GNE}}-J^{\mathrm{limited}}
+\]
+as the \textbf{information gap}.
+
+A key empirical variable is cross-resource wind correlation,
+\[
+\rho_{ij}=\mathrm{Corr}(W_i,W_j).
+\]
+Highly correlated wind resources are more likely to compete for export headroom at the same time and to experience simultaneous low-output periods. We will test how correlation and interconnection tightness change coordination failures, equilibrium behavior, and the value of aggregate information.
+
+\subsection*{Part II: Multi-Agent Reinforcement Learning}
+
+\textbf{RQ2: Can adaptive agents recover coordinated operation under partial observability?}
+
+The existing single-agent SAC environment will be generalized to a partially observable Markov game. We will compare
+\[
+\text{CTDE: centralized training, decentralized execution}
+\]
+and
+\[
+\text{DTDE: decentralized training, decentralized execution}.
+\]
+
+A local observation may be
+\[
+o_{i,t}^{\mathrm{local}}
+=
+\left[
+W_{i,t},
+E^{\mathrm{soc}}_{i,t},
+\pi_t^{RT},
+P_i,
+E_i
+\right],
+\]
+while an aggregate-information observation additionally contains
+\[
+K-Q_{t-1}.
+\]
+
+The principal comparison is therefore
+\[
+\text{centralized oracle}
+\rightarrow
+\text{full-information game}
+\rightarrow
+\text{limited-information game}
+\rightarrow
+\text{CTDE MARL}
+\rightarrow
+\text{fully decentralized MARL}.
+\]
+
+We will test whether agents learn stable anti-coordination, synchronized charging/discharging, cycling, or implicit cooperation, and how these behaviors change with wind correlation and interconnection tightness. MARL is used here as a tool for studying adaptive coordination under information constraints rather than as a replacement for the game-theoretic benchmark.
+
+\subsection*{Part III: Market Monitoring, Enforcement, and Resilience}
+
+\textbf{RQ3: How should a market monitor design detection and correction policies when renewable uncertainty makes strategic behavior difficult to distinguish from legitimate delivery error?}
+
+The monitor introduces a second information problem. Agents may have limited information about one another, while the monitor has limited information about agent intent.
+
+Let $b_{i,t}$ denote a day-ahead award or baseline expected delivery. The observed shortfall is
+\[
+z_{i,t}=b_{i,t}-q_{i,t}.
+\]
+A positive shortfall can result from both forecast error and deliberate strategic behavior. We model the monitor's signal as
+\[
+y_{i,t}=m_{i,t}+\varepsilon_{i,t},
+\]
+where $m_{i,t}\ge0$ is strategic withholding or strategic deviation and $\varepsilon_{i,t}$ is renewable/weather and measurement noise calibrated from forecast errors.
+
+For a monitoring rule, define
+\[
+q_0=\Pr(\text{sanction}\mid m=0),
+\qquad
+q_1=\Pr(\text{sanction}\mid m>0),
+\]
+and the detection gap
+\[
+\Delta q=q_1-q_0.
+\]
+
+\textbf{Baseline: fine and disgorgement.}
+If a detected operator disgorges gain $g$ and pays a capped fine $F\le\bar F$ after delay $d$, a one-shot deviation is deterred when
+\[
+g
+\le
+\delta^d
+\left[
+q_1g+\Delta qF
+\right],
+\]
+which implies
+\[
+F^\star
+=
+\frac{g(\delta^{-d}-q_1)}{\Delta q}.
+\]
+Poorer information or slower enforcement increases the required fine and can make monetary deterrence infeasible.
+
+\textbf{Finite-duration correction policy.}
+When the fine cap binds, the monitor may impose a temporary loss $\ell$ for $T$ periods, representing a revenue haircut, reduced market access, tighter operating limits, or another stylized correction mechanism. We seek the minimum duration $T^\star$ that restores incentive compatibility. This creates a direct comparison among no correction, one-shot penalties, finite correction windows, and excessively long punishment.
+
+\textbf{Enforcement friction.}
+To represent appeal, settlement, or evidentiary uncertainty without modeling a separate legal game, we use an enforceability factor
+\[
+F^{\mathrm{eff}}=\kappa(\sigma)F,
+\qquad
+\kappa'(\sigma)<0,
+\]
+where noisier evidence reduces the expected enforceable sanction.
+
+\textbf{Adversarial stress tests and resilient redesign.}
+After calibrating nominal strategic behavior, we introduce three disruptions: temporary POI derating, biased aggregate/headroom signals, and communication loss. Defenses include improved monitoring, cross-checking renewable forecasts, headroom broadcasts, minimum reserve/SoC rules, and limits on how much capacity may be simultaneously sanctioned. The goal is to test whether a mechanism designed for selfish behavior remains effective under previously unseen disruptions.
+
+\section*{5. Computational Experiments and Metrics}
+
+Episodes will use approximately 24--96 hourly decision periods sampled from historical data, keeping the wargame dynamic while making repeated equilibrium and MARL experiments tractable. We will stress test across combinations of
+\[
+K,\quad
+\rho_W,\quad
+\text{fixed storage design},\quad
+\text{information regime},\quad
+\text{policy class},\quad
+\text{monitoring quality},\quad
+\text{attack type}.
+\]
+
+Primary metrics include total system profit, individual profit, wind curtailment, battery throughput, under-delivery, POI violations, price-of-anarchy/decentralization gap, information gap, MARL recovery, false-positive rate $q_0$, detection rate $q_1$, required fine $F^\star$, optimal correction duration $T^\star$, and resilience loss under disruption.
+
+The central comparison is
+\[
+\boxed{
+\text{centralized}
+\rightarrow
+\text{strategic decentralized}
+\rightarrow
+\text{limited information}
+\rightarrow
+\text{MARL}
+\rightarrow
+\text{monitored}
+\rightarrow
+\text{attacked/resilient}.
+}
+\]
+
+\section*{6. Workshop 1 Plan}
+
+By Workshop 1, we plan to deliver:
+
+\begin{enumerate}
+    \item A reproducible data pipeline using public ERCOT DAM/RTM prices, 60-Day DAM/SCED disclosure data, ERCOT wind forecasts, EIA-860 asset metadata, and public BESS technical parameters.
+    \item A prototype with approximately 3--5 real wind-resource time series, fixed co-located batteries, and one configurable shared POI.
+    \item A centralized dispatch benchmark and a decentralized full-information operating game.
+    \item A first comparison among full information, aggregate-information, and local-information decision structures.
+    \item Preliminary sensitivity results over wind correlation and shared interconnection tightness, reporting system profit, individual profit, battery behavior, and POI violations.
+    \item A preliminary monitor calibration using observed wind-forecast errors to define signal-noise regimes and false-positive/true-positive detection behavior.
+\end{enumerate}
+
+The full MARL comparison, adaptive monitoring, strategic attacks, and resilience experiments will be developed after Workshop 1.
+
+\section*{7. Expected Contribution}
+
+The project focuses on a single question: how independently controlled wind--storage resources coordinate---or fail to coordinate---when they share physical infrastructure but do not share objectives or information. The first layer quantifies the cost of strategic decentralization and limited information. The second asks whether adaptive multi-agent learning can recover coordination using only local or aggregate signals. The third studies whether an imperfect market monitor can deter harmful strategic deviations when renewable forecast error makes intent difficult to infer.
+
+The final goal is a single computational testbed that connects strategic operation, adaptive learning, enforcement, and resilience while clearly distinguishing observed public data from designed wargame scenarios.
+
+\section*{References}
+
+\begin{enumerate}[leftmargin=1.5em]
+
+\item Borenstein, S., Bushnell, J. B., and Wolak, F. A. (2002).
+Measuring market inefficiencies in California's restructured wholesale electricity market.
+\textit{American Economic Review}, 92(5), 1376--1405.
+
+\item Horta\c{c}su, A., and Puller, S. L. (2008).
+Understanding strategic bidding in multi-unit auctions: a case study of the Texas electricity spot market.
+\textit{RAND Journal of Economics}, 39(1), 86--114.
+
+\item Salazar-Pe\~na, N., Tabares, A., and Gonz\'alez-Mancera, A. (2026).
+MARLEM: A multi-agent reinforcement learning simulation framework for implicit cooperation in decentralized local energy markets.
+\textit{Applied Energy}, 412, 127546.
+
+\item von Stengel, B. (2016).
+Recursive inspection games.
+\textit{Mathematics of Operations Research}, 41(3), 935--952.
+
+\item Zhao, D., Jafari, M., Botterud, A., and Sakti, A. (2022).
+Strategic energy storage investments: A case study of the CAISO electricity market.
+\textit{Applied Energy}, 325, 119909.
+
+\item Electric Reliability Council of Texas (ERCOT).
+Historical DAM and RTM prices; 60-Day DAM Disclosure Reports; 60-Day SCED Disclosure Reports; Wind Power Production Actual and Forecast Reports.
+
+\item U.S. Energy Information Administration (EIA).
+Form EIA-860 detailed generator and energy-storage data.
+
+\item National Renewable Energy Laboratory / Annual Technology Baseline (ATB).
+Utility-scale battery storage technical and cost assumptions.
+
+\end{enumerate}
+
+\end{document}

@@ -1,0 +1,12 @@
+numpy
+pandas
+scipy
+matplotlib
+cvxpy
+pyyaml
+openpyxl
+requests
+pytest
+tqdm
+pyarrow
+gridstatus
