@@ -1,241 +1,204 @@
-# Workshop 1 Report: Strategic Coordination in Co-Located Wind–Storage Systems
+# Workshop 1 Report: Strategic Coordination in Co-Located Wind-Storage Systems
 
-Team: Nicolás Acevedo Villena, Subham Saha, and Ziqi Wei  
+Team: Nicolás Acevedo Villena, Subham Saha, and Ziqi Wei
 Course: MIT 6.974 Wargame, Fall 2026
 
-## Scope
+## 1. Scope
 
-This deliverable implements the Workshop 1 operating benchmark: a reproducible public-data pipeline, a real multi-resource wind–storage site with a shared POI, centralized and decentralized dispatch, a coordination-by-foresight matrix, sensitivity experiments, and empirical monitor calibration. MARL, adaptive monitoring, and resilience attacks remain later-workshop tasks.
+Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors matters most. The headline experiment is the 14-cell design matrix. The earlier regime list and parameter grid are retained only as superseded artifacts. The preliminary monitor calibration is included as a Part III input.
 
-## Data
+### Model
 
-| Quantity | Public source/report | Window used | Status |
+Each unit chooses wind curtailment, battery charge, and battery discharge subject to battery power, energy, efficiency, and terminal-state constraints. Net injections share a POI limit K and a delivery obligation D. The planning mechanisms allocate shortfall and attempted-overflow penalties, after which a realization layer removes any physical overflow pro rata. The realized system objective is `J = realized energy profit - discharge degradation cost - lambda_minus × realized under-delivery`; attempted-overflow penalties are strategic signals and do not enter J. [DESIGN.md](../DESIGN.md) gives the full implementation contract, and [two_player_formulation.md](../two_player_formulation.md) gives the minimal analytical version.
+
+## 2. Data
+
+| Quantity | Source | Window | Status |
 | --- | --- | --- | --- |
-| DA and RT prices | ERCOT NP4-180-ER and NP6-785-ER | 2025-03-01 to 2025-04-30 | Observed |
-| Wind availability/output | ERCOT NP3-965-ER | 2025-03-01 to 2025-04-30 | Observed |
-| COP forecast and baseline | ERCOT COP snapshot and NP3-966-ER | 2025-03-01 to 2025-04-30 | Observed/constructed |
-| Forecast-error regimes | ERCOT NP4-732-CD and NP4-742-CD | Rolling MIS snapshot, publications 2026-10-13 … 10-20 (system level); 2025-03-01 … 04-30 (resource level) | Calibrated from observations |
-| Battery design | Observed co-located BESS, EIA-860, NREL ATB | Base configuration | Calibrated |
-| POI, delivery, penalties, information, monitor policy | Wargame design | Experiment grid | Designed |
+| DA and RT prices | ERCOT NP4-180-ER and NP6-785-ER | 2025-03-01 to 2025-04-30 | observed |
+| Wind availability and output | ERCOT NP3-965-ER | 2025-03-01 to 2025-04-30 | observed |
+| COP forecast and baseline | ERCOT COP snapshot and NP3-966-ER | 2025-03-01 to 2025-04-30 | observed/constructed |
+| Forecast-error regimes | ERCOT NP4-732-CD and NP4-742-CD | October 2026 system snapshot; March-April 2025 resource sample | calibrated |
+| Battery design | Observed Anchor BESS, EIA-860, and NREL ATB | base configuration | calibrated |
+| POI, obligation, penalties, and four factors | wargame design | 60 complete operating days | designed |
 
-The configured window is 2025-03-01 through 2025-04-30 at HB_WEST. It contains 60 complete daily episodes and 1 incomplete episode(s) across 61 calendar days; the base table evaluates all 60 complete episodes.
+The configured window contains 60 complete 24-hour episodes and 1 incomplete episode(s) across 61 calendar days. The design matrix evaluates 60 days at HB_WEST for the Anchor Wind base site.
 
-### Base-case resources: Anchor Wind
+| Resource | Nameplate (MW) | Coverage | Mean capacity factor |
+| --- | --- | --- | --- |
+| ANCHOR_WIND1 | 16.0 | 100.0% | 0.507 |
+| ANCHOR_WIND2 | 98.8 | 100.0% | 0.601 |
+| ANCHOR_WIND3 | 88.8 | 100.0% | 0.516 |
+| ANCHOR_WIND4 | 38.7 | 100.0% | 0.585 |
+| ANCHOR_WIND5 | 19.3 | 100.0% | 0.485 |
 
-| Resource | Site | Nameplate (MW) | Coverage | Mean CF |
+The system-level monitor-noise snapshot is from a different period than the operating experiment. This limitation is carried through the interpretation.
+
+## 3. Design factors and cells
+
+| Factor | Levels | Operational meaning | Model implementation | Measured contrast |
 | --- | --- | --- | --- | --- |
-| ANCHOR_WIND1 | Anchor Wind | 16.0 | 100.0% | 0.507 |
-| ANCHOR_WIND2 | Anchor Wind | 98.8 | 100.0% | 0.601 |
-| ANCHOR_WIND3 | Anchor Wind | 88.8 | 100.0% | 0.516 |
-| ANCHOR_WIND4 | Anchor Wind | 38.7 | 100.0% | 0.585 |
-| ANCHOR_WIND5 | Anchor Wind | 19.3 | 100.0% | 0.485 |
+| F1 control | C, D | One plant controller or independent unit controllers | Central receding-horizon LP or decentralized policy | C_x minus D_x_* at fixed foresight |
+| F2 foresight | P, F | Realized future conditions or operational forecasts | True wind/RT price or current truth followed by COP wind/DA price | X_P minus X_F for every matching cell |
+| F3 penalty allocation | INJ, EQ | Causal contribution or equal responsibility | Positive-injection overflow shares plus own deficits, or equal system-penalty shares | INJ minus EQ at fixed F2 and F4 |
+| F4 market information | FULL, PRICE, NONE | Other plans, a congestion price, or neither | Best-response game, coordinator price iteration, or fixed capacity-share POI budget | FULL minus PRICE, PRICE minus NONE, and FULL minus NONE at fixed F2 and F3 |
 
-### Designed correlation sets
-
-| Set | Members | Target ρ | Mean ρ | Range ρ | Nameplate (MW) |
-| --- | --- | --- | --- | --- | --- |
-| low | HHGT_HHOLLOW1, HHGT_HHOLLOW3, ANCHOR_WIND2, LACY_CRK_UNIT2 | 0.55 | 0.550 | 0.221–0.946 | 550.4 |
-| medium | HHGT_HHOLLOW3, HHGT_CALLAHAN, ANCHOR_WIND5, VERAWIND_UNIT5 | 0.75 | 0.750 | 0.641–0.897 | 459.5 |
-| high | VERAWIND_UNIT1, VERAWIND_UNIT3, VERAWIND_UNIT4, VERAWIND_UNIT5 | 0.95 | 0.950 | 0.932–0.982 | 232.5 |
-
-![Wind correlation and selected sets](../../results/figures/fig_wind_corr.png)
-
-*The selected low, medium, and high sets have mean correlations 0.55, 0.75, and 0.95 (within the low set, pairwise ρ ranges from 0.22 to 0.95), so the sensitivity grid spans materially different coincidence in wind availability.*
-
-![HB_WEST prices](../../results/figures/fig_prices.png)
-
-*DA and RT prices range from $-26.66 to $1,540.68/MWh, the largest forecast loss coincides with the window's price maximum, and across days the correlation between the daily forecast gap and the daily maximum RT price is r = 0.83.*
-
-[ASSUMPTIONS.md](../ASSUMPTIONS.md) records every source and status. Prices, wind, forecasts, awards, and resource metadata are observed; nameplate, storage size, efficiency, degradation cost, and monitor-noise regimes are calibrated; K, D, λ⁻ = 250 $/MWh, information structures, thresholds, and enforcement parameters are designed.
-
-Base parameters: kappa_K = 0.6, delta_D = 0.5, λ⁻ = 250, λ⁺ = 100 $/MWh, p = 0.29, E/P = 1.5 h, η_RT = 0.85, C_deg = 10 $/MWh (config/base.yaml)
-
-## Model summary
-
-The physical and strategic model follows [DESIGN.md §3–§4](../DESIGN.md). Its realized system objective is `J = raw realized profit − λ⁻ × under-delivery`; λ⁺ is excluded from realized J because the realization layer enforces K. Attempted overflow remains a strategic diagnostic. Every gap and PoA below leads with J; raw-profit counterparts are retained separately.
-
-## Headline results
-
-| Regime | System objective J ($/day) | Raw profit ($/day) | Curtailment (MWh) | Throughput (MWh) | Under-delivery (MWh) | Overflow attempt (MWh) | Converged |
+| F2 | Central | INJ/FULL | INJ/PRICE | INJ/NONE | EQ/FULL | EQ/PRICE | EQ/NONE |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| R1 | 51,772 | 57,764 | 893.6 | 251.9 | 24.0 | 0.0 | n/a |
-| R1_f | 45,158 | 54,700 | 902.6 | 230.0 | 38.2 | 0.0 | n/a |
-| R2 | 51,048 | 57,666 | 895.9 | 290.6 | 26.5 | 45.5 | 97% |
-| R2_f | 43,875 | 54,003 | 908.9 | 272.6 | 40.5 | 50.4 | 90% |
-| R3a | 51,724 | 57,717 | 887.4 | 258.0 | 24.0 | 0.0 | 80% |
-| R3b | 51,380 | 57,373 | 892.2 | 250.3 | 24.0 | 0.0 | 90% |
-| R4a | 48,589 | 57,428 | 921.2 | 261.5 | 35.4 | 47.5 | n/a |
-| R4a_f | 41,956 | 54,019 | 933.0 | 242.1 | 48.2 | 52.7 | n/a |
-| R4b | 48,659 | 57,491 | 914.6 | 262.5 | 35.3 | 0.0 | n/a |
-| R4b_f | 42,147 | 54,160 | 936.6 | 227.1 | 48.1 | 0.0 | n/a |
+| P | C_P | D_P_INJ_FULL | D_P_INJ_PRICE | D_P_INJ_NONE | D_P_EQ_FULL | D_P_EQ_PRICE | D_P_EQ_NONE |
+| F | C_F | D_F_INJ_FULL | D_F_INJ_PRICE | D_F_INJ_NONE | D_F_EQ_FULL | D_F_EQ_PRICE | D_F_EQ_NONE |
 
-| Objective-based gap | Mean ($/day) | Median ($/day) | Mean of daily % of J_R1 | Maximum ($/day) |
-| --- | --- | --- | --- | --- |
-| Strategic gap | 723.80 | 193.21 | 1.49 | 9,588.18 |
-| Aggregate-information gap | 2,458.51 | 1,060.16 | 3.30 | 43,584.39 |
-| Local-information gap | 2,388.79 | 1,116.17 | 3.21 | 43,911.46 |
-| Aggregate-signal value | -69.73 | 0.00 | -0.08 | 1,823.48 |
-| Central forecast gap | 6,613.39 | 2,142.28 | 12.51 | 101,069.24 |
-| Game forecast gap | 7,173.28 | 1,829.63 | 12.91 | 101,659.64 |
-| Aggregate-MPC forecast gap | 6,633.01 | 1,780.68 | 11.95 | 100,206.61 |
+The cell ids and ordering above come from `code/wargame/experiments/design.py`. Every policy replans hourly over the remaining horizon, submits one hour, passes the joint action through the realization layer, and uses realized state of charge in the next hour.
 
-| Efficiency ratio | Objective mean | Objective median | Raw-profit mean | Raw-profit median |
-| --- | --- | --- | --- | --- |
-| R1 / R2 | 1.016 | 1.004 | 1.004 | 1.002 |
-| R1_f / R2_f | 1.019 | 1.010 | 1.013 | 1.005 |
+## 4. Results by factor
 
-Raw-profit comparisons omit the system shortage charge:
+All factor effects are matched daily contrasts on realized J from `design_matrix_effects.csv`. In every table, percentages of C_P are means of daily percentages, not ratios of aggregate means. Reliability is reported beside every contrast involving FULL or PRICE. For FULL, max_gain is the remaining unilateral-deviation gain; PRICE has no unilateral-deviation statistic. Because C_P is negative on some individual days, a signed daily max_gain/C_P ratio can make the mean percentage negative even though max_gain itself is nonnegative.
 
-| Raw-profit gap | Mean ($/day) | Median ($/day) | Mean of daily % of R1 profit | Maximum ($/day) |
-| --- | --- | --- | --- | --- |
-| Strategic gap | 98.24 | 131.56 | 0.31 | 2,049.25 |
-| Aggregate-information gap | 238.23 | 20.43 | 0.30 | 3,531.40 |
-| Local-information gap | 175.28 | 61.17 | 0.23 | 3,477.23 |
-| Aggregate-signal value | -62.95 | 0.00 | -0.07 | 1,823.48 |
-| Central forecast gap | 3,064.67 | 826.16 | 3.61 | 106,253.07 |
-| Game forecast gap | 3,663.44 | 1,263.06 | 4.53 | 106,029.74 |
-| Aggregate-MPC forecast gap | 3,409.24 | 840.60 | 4.34 | 106,840.37 |
+### F1 control
 
-The strategic gap is small on a typical day but heavy-tailed: its mean is $724/day versus a $193/day median, and the gap exceeds $100 on 37 of 60 days. Of the mean strategic gap (J_R1 − J_R2 = $724/day), R3a (full exposure to the shared shortage/overflow penalties) recovers 93.5% and R3b (R3a plus the POI dual price broadcast) recovers 45.9%; R3a recovers more. Because R3b recovers less than R3a, charging the central dual price on injections acts as a tax without rebate and reduces J. The mean aggregate-information gap (R2 − R4a) is $2,459/day (4.7% of mean J_R1) versus a mean strategic gap (R1 − R2) of $724/day (1.4%); the mean headroom-signal value (R4a − R4b) is -$70/day (-0.1% of mean J_R1), so the signal does not help on average. The three largest days are:
+Hypothesis: centralized control weakly increases J because it internalizes the shared POI and obligation. Central minus decentralized J is positive in 12 of 12 held-fixed cells. The perfect-foresight headline contrast, C_P minus the mean of its six decentralized matches, is $1,101/day (1.923% of C_P). The expected nonnegative sign is confirmed.
 
-| Day | Strategic gap ($) | Gap (% J_R1) | Max RT price ($/MWh) | Wind availability (MWh) |
-| --- | --- | --- | --- | --- |
-| 2025-04-26 | 9,588 | 19.3 | 117.58 | 2,010.7 |
-| 2025-03-10 | 4,752 | 9.9 | 94.34 | 1,061.2 |
-| 2025-03-01 | 3,567 | 4.8 | 148.07 | 1,617.2 |
+| Contrast on realized J | Held fixed | Mean ($/day) | Median ($/day) | Mean (% of C_P) | n days | Solver reliability for FULL/PRICE cells |
+| --- | --- | --- | --- | --- | --- | --- |
+| C_P - mean(D_P_*) | foresight=P | 1,101 | 473 | 1.923 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020%; D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE; D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007%; D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_P - D_P_INJ_FULL | foresight=P; share=INJ; info=FULL | 409 | 192 | 0.926 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020% |
+| C_P - D_P_INJ_PRICE | foresight=P; share=INJ; info=PRICE | 283 | 55 | 0.614 | 60 | D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_P - D_P_INJ_NONE | foresight=P; share=INJ; info=NONE | 971 | 508 | 1.681 | 60 | not applicable |
+| C_P - D_P_EQ_FULL | foresight=P; share=EQ; info=FULL | 1,664 | 264 | 2.787 | 60 | D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007% |
+| C_P - D_P_EQ_PRICE | foresight=P; share=EQ; info=PRICE | 1,297 | 51 | 2.227 | 60 | D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_P - D_P_EQ_NONE | foresight=P; share=EQ; info=NONE | 1,985 | 726 | 3.302 | 60 | not applicable |
+| C_F - mean(D_F_*) | foresight=F | 921 | 431 | 1.406 | 60 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039%; D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE; D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383%; D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_F - D_F_INJ_FULL | foresight=F; share=INJ; info=FULL | 752 | 255 | 1.266 | 60 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039% |
+| C_F - D_F_INJ_PRICE | foresight=F; share=INJ; info=PRICE | 241 | 39 | 0.515 | 60 | D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_F - D_F_INJ_NONE | foresight=F; share=INJ; info=NONE | 901 | 469 | 1.499 | 60 | not applicable |
+| C_F - D_F_EQ_FULL | foresight=F; share=EQ; info=FULL | 1,468 | 377 | 1.970 | 60 | D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383% |
+| C_F - D_F_EQ_PRICE | foresight=F; share=EQ; info=PRICE | 767 | 61 | 1.109 | 60 | D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| C_F - D_F_EQ_NONE | foresight=F; share=EQ; info=NONE | 1,400 | 508 | 2.078 | 60 | not applicable |
 
-R4a exceeds R2 on 12 of 60 days. On those days only, mean attempted overflow is 116.5 MWh in R2 versus 59.4 MWh in R4a; mean throughput is 221.3 MWh in R2 versus 152.8 MWh in R4a. On those days, R4a's advantage is associated with less attempted shared-POI overflow and less throughput. Over all 60 days, the mean attempted overflow is 45.5 MWh in R2 and 47.5 MWh in R4a, so R4a attempts more overflow than R2 over all days.
+*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
-The central forecast gap dominates the other average losses: it averages $6,613/day, or 12.5 % of daily J_R1 on average, versus a median $2,142/day and 3.6 %. The worst day is 2025-04-07, with a $101,069 gap and a maximum RT price of $1,540.68/MWh; the largest forecast loss coincides with the window's price maximum (on 2025-04-07). Across the 60 days, the correlation between the daily forecast gap and the daily maximum RT price is r = 0.83.
+### F2 foresight
 
-![Daily system objective by regime](../../results/figures/fig_regime_profit.png)
+Hypothesis: perfect remaining-horizon wind and RT-price foresight weakly increases J relative to COP-wind and DA-price forecasts. Every matched P minus F mean is positive. Effects range from $6,028 to $6,956/day, confirming the expected value of better foresight.
 
-*R1 has the highest mean J ($51,772/day), R4a_f has the lowest ($41,956/day), and a few extreme days dominate the strategic-gap mean.*
+| Contrast on realized J | Held fixed | Mean ($/day) | Median ($/day) | Mean (% of C_P) | n days | Solver reliability for FULL/PRICE cells |
+| --- | --- | --- | --- | --- | --- | --- |
+| C_P - C_F | control=C | 6,613 | 2,142 | 11.136 | 60 | not applicable |
+| D_P_INJ_FULL - D_F_INJ_FULL | control=D; share=INJ; info=FULL | 6,956 | 1,927 | 11.476 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020%; D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039% |
+| D_P_INJ_PRICE - D_F_INJ_PRICE | control=D; share=INJ; info=PRICE | 6,571 | 1,608 | 11.036 | 60 | D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE; D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_INJ_NONE - D_F_INJ_NONE | control=D; share=INJ; info=NONE | 6,544 | 1,443 | 10.954 | 60 | not applicable |
+| D_P_EQ_FULL - D_F_EQ_FULL | control=D; share=EQ; info=FULL | 6,417 | 1,514 | 10.320 | 60 | D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007%; D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383% |
+| D_P_EQ_PRICE - D_F_EQ_PRICE | control=D; share=EQ; info=PRICE | 6,083 | 1,438 | 10.018 | 60 | D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE; D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_EQ_NONE - D_F_EQ_NONE | control=D; share=EQ; info=NONE | 6,028 | 1,253 | 9.913 | 60 | not applicable |
 
-![Illustrative dispatch trajectory](../../results/figures/fig_trajectory_2025-04-26.png)
+*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
-*On 2025-04-26, the objective spread among R1, R2, and R4b is $11,227, on the day with the largest strategic gap in the window. Relative to R1, throughput is essentially unchanged (291.2 MWh in R2 versus 291.2 MWh in R1), and under-delivery is 80.4 MWh in R2 versus 13.3 MWh in R1.*
+### F3 penalty allocation
 
-## Information-structure matrix
+Hypothesis: causal positive-injection overflow shares and own-deficit charges increase J relative to equal system-penalty shares. Every INJ minus EQ mean is positive, from $498 to $1,255/day, confirming the expected benefit of causal overflow shares and own-deficit charges. The medians show that this factor is heavy-tailed.
 
-| Coordination | Perfect J ($/day) | Forecast J ($/day) | Perfect raw profit | Forecast raw profit |
-| --- | --- | --- | --- | --- |
-| C | 51,772 | 45,158 | 57,764 | 54,700 |
-| G | 51,048 | 43,875 | 57,666 | 54,003 |
-| A | 48,589 | 41,956 | 57,428 | 54,019 |
-| L | 48,659 | 42,147 | 57,491 | 54,160 |
+| Contrast on realized J | Held fixed | Mean ($/day) | Median ($/day) | Mean (% of C_P) | n days | Solver reliability for FULL/PRICE cells |
+| --- | --- | --- | --- | --- | --- | --- |
+| D_P_INJ_FULL - D_P_EQ_FULL | control=D; foresight=P; info=FULL | 1,255 | 11 | 1.860 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020%; D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007% |
+| D_P_INJ_PRICE - D_P_EQ_PRICE | control=D; foresight=P; info=PRICE | 1,014 | 0 | 1.613 | 60 | D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE; D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_INJ_NONE - D_P_EQ_NONE | control=D; foresight=P; info=NONE | 1,014 | 0 | 1.620 | 60 | not applicable |
+| D_F_INJ_FULL - D_F_EQ_FULL | control=D; foresight=F; info=FULL | 716 | 9 | 0.704 | 60 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039%; D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383% |
+| D_F_INJ_PRICE - D_F_EQ_PRICE | control=D; foresight=F; info=PRICE | 526 | 0 | 0.594 | 60 | D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE; D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_INJ_NONE - D_F_EQ_NONE | control=D; foresight=F; info=NONE | 498 | 0 | 0.579 | 60 | not applicable |
 
-| Coordination | Perfect (% J_R1) | Forecast (% J_R1) | Perfect (% R1 profit) | Forecast (% R1 profit) |
-| --- | --- | --- | --- | --- |
-| C | 100.0 | 87.2 | 100.0 | 94.7 |
-| G | 98.6 | 84.7 | 99.8 | 93.5 |
-| A | 93.9 | 81.0 | 99.4 | 93.5 |
-| L | 94.0 | 81.4 | 99.5 | 93.8 |
+*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
-![Information-structure matrix](../../results/figures/fig_info_matrix.png)
+The daily INJ minus EQ effect averaged over its six matched F2/F4 cells exceeds $100 on 30 of 60 days. The three largest days are:
 
-*The lowest matrix cell in J is A under forecast foresight, while the perfect-to-forecast column change is much larger than the differences across coordination rows.*
+| Day | Mean matched INJ minus EQ ($/day) |
+| --- | --- |
+| 2025-03-01 | 7,740 |
+| 2025-04-07 | 6,859 |
+| 2025-04-06 | 6,563 |
 
-## Sensitivity
+### F4 market information and coordination
 
-Full grid: κK ∈ {0.5, 0.6, 0.7, 0.8, 0.9, 1.0}, 3 correlation sets, 5 storage designs, 20 days (every 3rd day), 6 regimes. The grid has 90 κK-by-correlation-by-storage configurations. All gaps below use J and are computed from configuration means over days (mean J by regime, then ratios). Figures and the tables below use the base storage design (p=0.29, duration=1.5 h) unless stated.
+Hypothesis: PRICE and FULL should generally outperform NONE; FULL minus PRICE has no pure information interpretation because PRICE changes the mechanism. PRICE minus NONE is positive in 4 of 4 held-fixed cells, as expected. FULL minus NONE is positive in 3 of 4 cells, so that expectation is mostly but not uniformly confirmed. FULL minus PRICE is negative in 4 of 4 cells.
 
-| Configuration-level finding (means over days) | Configuration / κK | Value |
-| --- | --- | --- |
-| Largest mean strategic gap | κK = 0.50, medium, p=0.29, duration=4 h | 2.97% of mean J_R1 |
-| Largest mean information gap (R2 − R4a) | κK = 0.50, high, p=0.5, duration=1.5 h | 8.42% of mean J_R1 |
-| Mean strategic gap first exceeds 1 % of J_R1 (loosest-to-tightest κK), low set, p=0.29, duration=1.5 h | never above 1 % on the grid |  |
-| Mean strategic gap first exceeds 1 % of J_R1 (loosest-to-tightest κK), medium set, p=0.29, duration=1.5 h | κK = 0.60 |  |
-| Mean strategic gap first exceeds 1 % of J_R1 (loosest-to-tightest κK), high set, p=0.29, duration=1.5 h | κK = 0.50 |  |
-| Highest mean PoA at κK = 0.60 | p=0.29, duration=4 h | 1.0193 |
-| Lowest mean PoA at κK = 0.60 | p=0.1, duration=1.5 h | 1.0038 |
-| Largest mean attempted overflow (R2) | κK = 0.50, low, p=0.29, duration=4 h | 115.7 MWh/day |
-| Largest mean under-delivery (R2) | κK = 0.60, high, p=0.1, duration=1.5 h | 14.7 MWh/day |
+| Contrast on realized J | Held fixed | Mean ($/day) | Median ($/day) | Mean (% of C_P) | n days | Solver reliability for FULL/PRICE cells |
+| --- | --- | --- | --- | --- | --- | --- |
+| D_P_INJ_FULL - D_P_INJ_PRICE | control=D; foresight=P; share=INJ | -126 | -9 | -0.312 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020%; D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_INJ_PRICE - D_P_INJ_NONE | control=D; foresight=P; share=INJ | 688 | 320 | 1.067 | 60 | D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_INJ_FULL - D_P_INJ_NONE | control=D; foresight=P; share=INJ | 562 | 216 | 0.755 | 60 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020% |
+| D_P_EQ_FULL - D_P_EQ_PRICE | control=D; foresight=P; share=EQ | -367 | 9 | -0.559 | 60 | D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007%; D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_EQ_PRICE - D_P_EQ_NONE | control=D; foresight=P; share=EQ | 688 | 388 | 1.074 | 60 | D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_EQ_FULL - D_P_EQ_NONE | control=D; foresight=P; share=EQ | 321 | 160 | 0.515 | 60 | D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007% |
+| D_F_INJ_FULL - D_F_INJ_PRICE | control=D; foresight=F; share=INJ | -511 | -80 | -0.752 | 60 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039%; D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_INJ_PRICE - D_F_INJ_NONE | control=D; foresight=F; share=INJ | 660 | 371 | 0.985 | 60 | D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_INJ_FULL - D_F_INJ_NONE | control=D; foresight=F; share=INJ | 149 | 212 | 0.233 | 60 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039% |
+| D_F_EQ_FULL - D_F_EQ_PRICE | control=D; foresight=F; share=EQ | -701 | -50 | -0.861 | 60 | D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383%; D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_EQ_PRICE - D_F_EQ_NONE | control=D; foresight=F; share=EQ | 633 | 304 | 0.969 | 60 | D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_EQ_FULL - D_F_EQ_NONE | control=D; foresight=F; share=EQ | -68 | 203 | 0.108 | 60 | D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383% |
 
-Mean strategic gap (R1 − R2, % of mean J_R1) by POI tightness and correlation set:
+*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
-| κK | low set | medium set | high set |
-| --- | --- | --- | --- |
-| 0.50 | 0.84 % | 1.41 % | 1.08 % |
-| 0.60 | 0.33 % | 1.07 % | 0.76 % |
-| 0.70 | 0.26 % | 0.91 % | 0.69 % |
-| 0.80 | 0.22 % | 0.83 % | 0.50 % |
-| 0.90 | 0.15 % | 0.80 % | 0.34 % |
-| 1.00 | 0.14 % | 0.79 % | 0.24 % |
+PRICE has higher mean J than FULL in all four held-fixed comparisons. This is not evidence that more information is worse. FULL is a non-cooperative equilibrium in which agents can still overshoot the POI when the price premium exceeds their marginal share of the overflow penalty. PRICE is a coordination mechanism whose fixed point approximates the central solution. The cells differ in both information and mechanism.
 
-Mean information gap (R2 − R4a, % of mean J_R1):
+![Design-matrix cell outcomes](../../results/figures/fig_design_matrix.png)
 
-| κK | low set | medium set | high set |
-| --- | --- | --- | --- |
-| 0.50 | 4.33 % | 6.74 % | 7.46 % |
-| 0.60 | 4.27 % | 5.89 % | 6.15 % |
-| 0.70 | 3.62 % | 5.28 % | 5.47 % |
-| 0.80 | 3.07 % | 4.49 % | 5.20 % |
-| 0.90 | 3.07 % | 4.14 % | 5.45 % |
-| 1.00 | 2.87 % | 3.90 % | 5.19 % |
+*Each entry is the mean of its daily percentage of C_P.*
 
-At κK = 1.0 the POI does not bind, so the remaining information gap (low 2.87 %, medium 3.90 %, high 5.19 % of J_R1) cannot come from POI competition; it measures the cost of private delivery commitments in the limited-information regimes, where each agent must cover its own D_i = δ_D·b_i because it cannot observe the aggregate shortfall, whereas game agents share the aggregate D.
+![Matched design effects](../../results/figures/fig_design_effects.png)
 
-![Objective gaps versus POI tightness](../../results/figures/fig_gaps_vs_kappa.png)
+*Bars show mean daily J contrasts; the underlying values are tabulated above.*
 
-*At the base storage design (p=0.29, duration=1.5 h; configuration means over days), the strategic gap for the high-correlation set is 0.24 % of J_R1 at κK = 1.0 and 1.08 % at κK = 0.5, versus 0.14 % and 0.84 % for the low set; the information gap for the high set goes from 5.19 % to 7.46 %, and signal value from -0.45 % to -1.72 % (20 days, every 3rd day). The aggregate headroom signal changes J by 1.42 % (low) and 1.64 % (medium) versus -0.84 % (high) of J_R1 at κK = 0.6 (positive means the signal helps). Both gaps grow as the POI tightens; at κK = 0.5 the strategic gap is largest for the medium set and the information gap for the high set.*
+## 5. Full matrix and operating metrics
 
-![Violations versus POI tightness](../../results/figures/fig_violations_vs_kappa.png)
+| Foresight | C | INJ_FULL | INJ_PRICE | INJ_NONE | EQ_FULL | EQ_PRICE | EQ_NONE |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| P | $51,772 (100.00%) | $51,362 (99.07%) | $51,489 (99.39%) | $50,801 (98.32%) | $50,108 (97.21%) | $50,475 (97.77%) | $49,787 (96.70%) |
+| F | $45,158 (88.86%) | $44,406 (87.60%) | $44,917 (88.35%) | $44,257 (87.36%) | $43,690 (86.89%) | $44,391 (87.75%) | $43,759 (86.79%) |
 
-*For the high-correlation set at the base storage design, mean R2 attempted overflow rises from 0.0 MWh/day at κK = 1.0 to 64.1 MWh/day at κK = 0.5 and mean under-delivery moves from 5.2 to 5.2 MWh/day (the low set: 67.9 and 3.6 MWh/day at κK = 0.5); the realization layer keeps physical export within K (20 days, every 3rd day).*
+*Each cell shows mean J followed by the mean of daily percentages of C_P in parentheses.*
 
-![Storage design comparison](../../results/figures/fig_storage_design.png)
+| Cell | Mean J ($/day) | Curtailment (MWh/day) | Throughput (MWh/day) | Under-delivery (MWh/day) | Attempted overflow (MWh/day) | Penalty concentration | Solver diagnostics |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| C_P | 51,772 | 885.8 | 259.7 | 24.0 | 0.0 | 0.441 | not applicable |
+| C_F | 45,158 | 902.6 | 230.0 | 38.2 | 0.0 | 0.439 | not applicable |
+| D_P_INJ_FULL | 51,362 | 890.7 | 269.6 | 24.9 | 28.5 | 0.526 | D_P_INJ_FULL: game converged 99.9% of hours, 2.11 mean sweeps/hour; max_gain distribution: mean $0.12, max $1.27; daily max_gain/C_P distribution: mean 0.0002%, max 0.0020% |
+| D_P_INJ_PRICE | 51,489 | 894.0 | 257.9 | 24.9 | 0.2 | 0.483 | D_P_INJ_PRICE: price coordination converged 98.3% of hours, 18.82 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_INJ_NONE | 50,801 | 909.1 | 259.6 | 24.9 | 0.0 | 0.364 | not applicable |
+| D_P_EQ_FULL | 50,108 | 911.3 | 298.1 | 30.0 | 153.3 | 0.200 | D_P_EQ_FULL: game converged 99.4% of hours, 1.58 mean sweeps/hour; max_gain distribution: mean $0.48, max $12.39; daily max_gain/C_P distribution: mean -0.0044%, max 0.0007% |
+| D_P_EQ_PRICE | 50,475 | 891.4 | 263.9 | 30.8 | 0.2 | 0.200 | D_P_EQ_PRICE: price coordination converged 97.6% of hours, 19.43 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_P_EQ_NONE | 49,787 | 909.1 | 264.8 | 30.9 | 0.0 | 0.200 | not applicable |
+| D_F_INJ_FULL | 44,406 | 909.3 | 245.3 | 39.5 | 31.0 | 0.584 | D_F_INJ_FULL: game converged 99.8% of hours, 12.67 mean sweeps/hour; max_gain distribution: mean $0.24, max $0.43; daily max_gain/C_P distribution: mean 0.0002%, max 0.0039% |
+| D_F_INJ_PRICE | 44,917 | 913.3 | 231.3 | 39.0 | 0.3 | 0.434 | D_F_INJ_PRICE: price coordination converged 95.4% of hours, 23.59 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_INJ_NONE | 44,257 | 931.1 | 223.7 | 38.5 | 0.0 | 0.512 | not applicable |
+| D_F_EQ_FULL | 43,690 | 915.9 | 279.3 | 40.8 | 155.7 | 0.200 | D_F_EQ_FULL: game converged 98.4% of hours, 6.09 mean sweeps/hour; max_gain distribution: mean $1.30, max $8.96; daily max_gain/C_P distribution: mean 0.0027%, max 0.0383% |
+| D_F_EQ_PRICE | 44,391 | 912.9 | 234.5 | 41.8 | 0.3 | 0.200 | D_F_EQ_PRICE: price coordination converged 95.3% of hours, 23.66 mean iterations/hour; max_gain is not applicable to PRICE |
+| D_F_EQ_NONE | 43,759 | 931.1 | 226.4 | 41.2 | 0.0 | 0.200 | not applicable |
 
-*Configuration-mean PoA spans 1.001–1.031 over the grid and, at κK = 0.60, from 1.0038 (p=0.1, duration=1.5 h) to 1.0193 (p=0.29, duration=4 h), so storage design changes both efficiency and curtailment; the design with the largest mean PoA is p=0.29, duration=4 h (1.016); mean realized curtailment differs by 168.9 MWh/day between the designs with the smallest (p=0.29, duration=4 h, 1,106.2) and largest (p=0.1, duration=1.5 h, 1,275.2) mean curtailment (20 days, every 3rd day).*
+*Mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
-## Monitor calibration
+Operating quantities are daily means from `design_matrix_summary.csv`. Penalty concentration is the largest agent share of allocated shortfall charges, with 1/N used when the total charge is zero. Realized overflow is zero by construction; attempted overflow records submitted actions before the POI controller intervenes.
 
-The low, medium, and high σ regimes come from real data. Results are given for both absolute thresholds and both withholding levels at δ = 0.98 and d = 4.
+## 6. Illustrative day trajectory
 
-| Noise | σ | τ/nameplate | m/nameplate | q0 | q1 | δ | d (h) | F*/g | F*·κ/g | Feasible (F* ≤ F̄ = 3g) | T* |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| low | 0.052 | 0.05 | 0.05 | 0.087 | 0.442 | 0.98 | 4 | 1.81 | 1.63 | yes | 8 |
-| low | 0.052 | 0.05 | 0.10 | 0.087 | 0.812 | 0.98 | 4 | 0.38 | 0.34 | yes | 2 |
-| low | 0.052 | 0.10 | 0.05 | 0.005 | 0.087 | 0.98 | 4 | 12.18 | 10.98 | no | 182 |
-| low | 0.052 | 0.10 | 0.10 | 0.005 | 0.442 | 0.98 | 4 | 1.47 | 1.33 | yes | 7 |
-| medium | 0.157 | 0.05 | 0.05 | 0.270 | 0.431 | 0.98 | 4 | 4.04 | 2.95 | no | 20 |
-| medium | 0.157 | 0.05 | 0.10 | 0.270 | 0.638 | 0.98 | 4 | 1.21 | 0.89 | yes | 6 |
-| medium | 0.157 | 0.10 | 0.05 | 0.173 | 0.269 | 0.98 | 4 | 8.41 | 6.15 | no | 56 |
-| medium | 0.157 | 0.10 | 0.10 | 0.173 | 0.431 | 0.98 | 4 | 2.53 | 1.85 | yes | 12 |
-| high | 0.212 | 0.05 | 0.05 | 0.364 | 0.515 | 0.98 | 4 | 3.77 | 2.47 | no | 18 |
-| high | 0.212 | 0.05 | 0.10 | 0.364 | 0.637 | 0.98 | 4 | 1.64 | 1.07 | yes | 7 |
-| high | 0.212 | 0.10 | 0.05 | 0.274 | 0.364 | 0.98 | 4 | 7.92 | 5.18 | no | 50 |
-| high | 0.212 | 0.10 | 0.10 | 0.274 | 0.515 | 0.98 | 4 | 2.35 | 1.54 | yes | 11 |
+The selected day is 2025-03-10, which has the largest tabulated C_P minus D_P_EQ_FULL gap, $15,345. The figure compares those two design cells and shows both submitted aggregate injection and realized dispatch.
 
-In the medium regime (resource-level COP σ = 0.157 of nameplate), a 5% withholding at a 5% threshold raises sanction probability only from q0 = 0.270 to q1 = 0.431, so it is detectable only weakly and with a substantial false-positive rate.
+![Design-matrix trajectory](../../results/figures/fig_design_trajectory_2025-03-10.png)
+
+## 7. Monitor calibration
+
+This preliminary Part III calibration maps observed forecast-error noise into false-positive probability q0, detection probability q1, required fine F*, and finite correction duration T*. The compact comparison below uses a 5% nameplate threshold, 5% withholding, delta = 0.98, and a 4-hour delay.
+
+| Noise | σ | q0 | q1 | F*/g | Feasible at 3g | T* (hours) |
+| --- | --- | --- | --- | --- | --- | --- |
+| low | 0.052 | 0.087 | 0.442 | 1.81 | yes | 8 |
+| medium | 0.157 | 0.270 | 0.431 | 4.04 | no | 20 |
+| high | 0.212 | 0.364 | 0.515 | 3.77 | no | 18 |
 
 ![Empirical monitor ROC](../../results/figures/monitor_roc.png)
 
-*The ROC curves overlap substantially across calibrated regimes, so a threshold that suppresses false positives also misses a material share of small withholding. Empirical AUC at m = 0.05 of nameplate: low 0.74, medium 0.56, high 0.54.*
+The calibration is preliminary: it does not infer intent and is not yet coupled to adaptive agents or attacks.
 
-![Required fine versus noise](../../results/figures/monitor_Fstar_vs_sigma.png)
+## 8. Limitations and roadmap
 
-*Required F*/g increases when q1 separates less from q0, making small withholding expensive to deter under noisier signals.*
+The operating results cover one spring window, one base site, five units, hourly resolution, and price-taking RT settlement. COP and DA forecasts are deterministic inputs, the delivery obligation and penalty rates are designed, and the model omits endogenous prices, outages, and two-settlement bidding. FULL results are approximate equilibria and PRICE results are approximate coordinator fixed points, so the solver diagnostics beside each affected contrast are part of the result.
 
-![Correction duration versus noise](../../results/figures/monitor_Tstar_vs_sigma.png)
-
-*Finite correction periods lengthen sharply when detection gain q1 − q0 is small; some low-detection combinations are not finitely deterrable on the plotted horizon (T_max = 10,000 periods); for example, regime low with τ = 0.10 of nameplate and m = 0.02 of nameplate (d = 1 h) has T* = ∞.*
-
-## What we learned / what breaks
-
-- The mean strategic gap is 1.5 % of daily J_R1, with a $193 median and a $9,588 maximum, so the mean is not representative of a typical day.
-- R4a beats the full-information Nash outcome on 12 days; on those days it is associated with less throughput and less attempted shared-POI overflow, although over all days R4a's mean attempted overflow is 47.5 MWh versus 45.5 MWh in R2.
-- Perfect foresight is worth an average of 12.5 % of daily J_R1, larger than the mean strategic and information effects.
-- Best-response regimes converge in 89.2% of evaluated base-day runs (converged requires residual ≤ tol and maximum unilateral gain ≤ $1); non-converged runs are not a tolerance artefact: over all R2/R3a/R3b day-runs the largest remaining unilateral gain is $12.39, i.e. 0.02 % of mean J_R1 (mean $0.57, 0.001 %). Convergence does not imply system optimality.
-- Sensitivity (means over days at the base storage design): tightening the POI from κK = 1.0 to 0.5 moves the strategic gap from 0.39 % to 1.11 % of J_R1 and the information gap (R2 − R4a) from 3.99 % to 6.18 % (averaged over correlation sets); at κK = 0.6, going from the low- to the high-correlation set moves the strategic gap from 0.33 % to 0.76 % and the information gap from 4.27 % to 6.15 %; the mean strategic gap increases with storage duration (1.0 h: 0.60 %, 1.5 h: 0.72 %, 4.0 h: 1.90 % at κK = 0.60, p = 0.29).
-- Coordination mechanisms: Of the mean strategic gap (J_R1 − J_R2 = $724/day), R3a (full exposure to the shared shortage/overflow penalties) recovers 93.5% and R3b (R3a plus the POI dual price broadcast) recovers 45.9%; R3a recovers more. Because R3b recovers less than R3a, charging the central dual price on injections acts as a tax without rebate and reduces J.
-- Information versus strategy: The mean aggregate-information gap (R2 − R4a) is $2,459/day (4.7% of mean J_R1) versus a mean strategic gap (R1 − R2) of $724/day (1.4%); the mean headroom-signal value (R4a − R4b) is -$70/day (-0.1% of mean J_R1), so the signal does not help on average.
-- With medium resource-level noise, a small withholding remains difficult to separate from legitimate forecast error: at m = 0.05 and τ = 0.05 of nameplate, q1 − q0 = 0.162.
-
-## Limitations
-
-The base results cover 60 complete episodes in one spring window at one co-located site. Full grid: κK ∈ {0.5, 0.6, 0.7, 0.8, 0.9, 1.0}, 3 correlation sets, 5 storage designs, 20 days (every 3rd day), 6 regimes. The forecast-error (monitor) regimes rest on a rolling MIS snapshot (publications 2026-10-13 … 10-20 at system level; resource-level data for 2025-03-01 … 04-30), so the system-level noise is calibrated on a different period from the operating window. The model is price-taking at RT, uses deterministic COP and DA forecasts inside MPC, and does not yet model two-settlement bidding, endogenous prices, outages, causal intent, or attacks.
-
-## Post-Workshop-1 roadmap
-
-Next steps are MARL under local and aggregate observations, adaptive thresholds and enforcement, explicit withholding and false-data attacks, and resilience mechanisms. Those extensions will retain this objective definition, centralized benchmark, realization layer, and reproducible data split.
+Next steps are to verify the hand-solved two-player example numerically, build the Part II partially observable multi-agent environment and CTDE/DTDE baselines, couple the monitor to simulated withholding, add adaptive enforcement and attacks, and resolve the forecast-error period mismatch.

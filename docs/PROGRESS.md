@@ -1,90 +1,96 @@
 # Project Progress
 
-**Last updated: 2026-10-21**
+Last updated: 2026-10-25
 
-Project: *Strategic Coordination, Learning, and Monitoring in Co-Located Wind–Storage Systems — A Computational Wargame* (MIT 6.974, Fall 2026).
+Project: *Strategic Coordination, Learning, and Monitoring in Co-Located Wind-Storage Systems: A Computational Wargame* (MIT 6.974, Fall 2026).
 
-| Part | Scope (docs/proposal.tex §4) | Status |
+| Part | Scope | Status |
 |---|---|---|
-| I | Strategic operation and information: centralized vs. decentralized, information regimes, correlation and POI sensitivity | Workshop 1 benchmark done |
-| II | Multi-agent reinforcement learning (CTDE vs. DTDE, local vs. aggregate observations) | Not started |
-| III | Market monitoring, enforcement and resilience | Preliminary calibration done; adaptive monitoring and attacks not started |
+| I | Four-factor operating design: control, foresight, penalty allocation, and market information/coordination | Complete for Workshop 1 |
+| II | Multi-agent reinforcement learning with CTDE and DTDE under partial observation | Not started |
+| III | Market monitoring, enforcement, and resilience | Preliminary monitor calibration complete; adaptive monitoring and attacks not started |
 
-## Workshop 1 status (proposal §6)
+## Workshop 1 status
 
-| # | Plan item | Status | Delivered by | Evidence |
-|---|---|---|---|---|
-| 1 | Reproducible public-data pipeline (ERCOT prices, 60-day DAM/SCED, wind forecasts, EIA-860, BESS parameters) | Done | `code/wargame/data/`, `code/scripts/01_*.py`, `02_*.py`, `data/processed/` | 61 calendar days (2025-03-01 to 04-30), 37-resource correlation pool, 11 processed files; EIA-860 and Anchor BESS metadata included. Caveat: system-level forecast errors are from the Oct 2026 snapshot |
-| 2 | Prototype with 3–5 real wind series, fixed co-located batteries, one configurable POI | Done | `code/wargame/model/`, `config/base.yaml` | Base case Anchor Wind: 5 resources (262 MW), battery 0.29 power ratio / 1.5 h, kappa_K configurable; `tests/` offline suite (5 test files) |
-| 3 | Centralized benchmark and decentralized full-information game | Done | `solvers/central.py`, `game.py`, `realize.py`; `03_run_regimes.py` | R1 and R2 on 60 complete days (`results/tables/regimes_by_day.csv`: 600 rows = 60 days x 10 regimes); R2 converges on 97% of days |
-| 4 | Comparison of full, aggregate and local information | Done | `solvers/mpc.py`, `receding.py`; `matrix_summary*.csv` | 4x2 matrix (C/G/A/L x perfect/forecast) plus R3a/R3b, all 10 regimes on 60 days; `fig_info_matrix` |
-| 5 | Sensitivity over wind correlation and POI tightness (profit, battery behaviour, POI violations) | Done | `04_sensitivity.py`, `results/tables/sensitivity*.csv` | 90 configurations (6 kappa_K x 3 correlation sets x 5 storage designs) x 20 days x 6 regimes = 10,800 rows |
-| 6 | Preliminary monitor calibration from observed forecast errors | Partial | `code/wargame/monitor/`, `05_monitor.py` | 3 noise regimes, ROC (72 rows), deterrence grid F*/T* (144 rows). Static thresholds only; no adaptive policy, no attacks; system-level noise from a different period than the operating window |
+| Item | Status | Evidence |
+|---|---|---|
+| Public-data pipeline | Done | ERCOT prices, SCED wind, COP forecasts, DAM awards, EIA-860 assets, and forecast-error samples in `data/processed/`; 60 complete days from 2025-03-01 through 2025-04-30 |
+| Shared-POI physical model and realization layer | Done | Five Anchor Wind units, calibrated storage, hourly battery physics, hard realized POI limit, delivery obligation, and realized objective J |
+| F1 control | Done | `C_P`, `C_F`, and all 12 matched decentralized cells in `design_matrix_by_day.csv`; F1 contrasts in `design_matrix_effects.csv` |
+| F2 foresight | Done | Perfect and forecast receding-horizon policies for every matching control/mechanism cell; seven F2 contrasts |
+| F3 penalty allocation | Done | Exact causal INJ overflow charge plus own-deficit shortfall charge versus EQ; six matched contrasts |
+| F4 market information and coordination | Done | FULL best-response games, PRICE coordinator fixed points, and NONE fixed-budget policies; 12 pairwise contrasts |
+| Full 2 by 7 matrix | Done | 840 day-cell rows, 14 summary rows, 39 matched contrasts, and two pivot rows in `results/tables/design_matrix_*.csv` |
+| Report | Done | Matrix-centered `docs/workshop1/report.md` and `.html`, with factor tables, solver diagnostics, operating metrics, and an illustrative matrix trajectory |
+| Preliminary monitor calibration | Done as Part III input | Three empirical noise regimes, ROC table, deterrence grid, and monitor figures from `code/scripts/05_monitor.py` |
 
-## Key results so far
+## Key results
 
-Source: `docs/workshop1/report.md` (base case: Anchor Wind, 60 days, kappa_K = 0.6; objective J = raw profit minus 250 $/MWh x under-delivery).
+- F1 control: `C_P - mean(D_P_*)` is $1,101/day, with a $473/day median and a mean daily effect of 1.923% of C_P. All 12 matched central-minus-decentralized means are positive. Source: `results/tables/design_matrix_effects.csv`.
+- F2 foresight: `C_P - C_F` is $6,613/day, with a $2,142/day median and a mean daily effect of 11.136% of C_P. All seven matched P-minus-F means are positive, from $6,028 to $6,956/day. Source: `results/tables/design_matrix_effects.csv`.
+- F3 penalty allocation: `D_P_INJ_FULL - D_P_EQ_FULL` is $1,255/day, but its median is $11/day. All six mean contrasts are positive and several medians are near zero, so the effect is heavy-tailed. Source: `results/tables/design_matrix_effects.csv`.
+- F4 information and coordination: under perfect foresight and INJ, PRICE-minus-NONE is $688/day, FULL-minus-NONE is $562/day, and FULL-minus-PRICE is -$126/day. PRICE exceeds NONE and FULL in all four held-fixed mean comparisons. FULL and PRICE differ in mechanism as well as information. Source: `results/tables/design_matrix_effects.csv`.
+- Solver reliability: FULL games converge in 99.39% of evaluated hours with 5.61 mean sweeps/hour; PRICE coordination converges in 96.68% of hours with 21.38 mean iterations/hour. Across FULL day-cells, max_gain averages $0.53 and reaches $12.39. Source: `results/tables/design_matrix_by_day.csv`.
+- Preliminary monitor calibration: at a 5% threshold and 5% withholding, q0/q1 are 0.087/0.442, 0.270/0.431, and 0.364/0.515 for low, medium, and high noise. Source: `results/tables/monitor_deterrence.csv`.
 
-- Strategic gap (J_R1 − J_R2): mean $724/day (1.5% of J_R1) but median $193/day and maximum $9,588/day (2025-04-26); heavy-tailed. Source: gap table, "Headline results".
-- Information gap (R2 − R4a): mean $2,459/day (4.7% of mean J_R1), about 3x the strategic gap; local-only gap is $2,389/day; the aggregate headroom signal is worth −$70/day on average, i.e. no gain. Source: gap table; `fig_regime_profit`, `fig_info_matrix`.
-- Forecast gap: perfect vs. forecast foresight costs $6,613/day in the central regime (12.5% of J_R1), the largest single effect; correlates with daily max RT price (r = 0.83). Source: gap table; `fig_prices`.
-- Coordination mechanisms: R3a (full exposure to shared penalties) recovers 93.5% of the strategic gap; R3b (R3a plus POI dual price) recovers only 45.9%, because the dual price acts as a tax without rebate. Source: "Headline results" text.
-- Sensitivity trends: tightening kappa_K from 1.0 to 0.5 raises the strategic gap from 0.39% to 1.11% and the information gap from 3.99% to 6.18% of J_R1; higher wind correlation raises both gaps at kappa_K = 0.6 (strategic 0.33% to 0.76%, information 4.27% to 6.15%); the gap grows with storage duration (1 h 0.60%, 4 h 1.90%). Source: `sensitivity_summary.csv`; `fig_gaps_vs_kappa`, `fig_violations_vs_kappa`, `fig_storage_design`.
-- Information floor at kappa_K = 1.0: the POI does not bind, yet the information gap remains 2.9–5.2% of J_R1, attributed to private delivery commitments D_i in limited-information regimes. Source: Sensitivity section.
-- Monitor calibration: q0 = 0.087 / 0.270 / 0.364 (low / medium / high noise, 5% threshold) and q1 = 0.442 / 0.431 / 0.515 for 5% withholding; empirical AUC at m = 0.05: 0.74 / 0.56 / 0.54. Required F* exceeds the cap (3g) in 5 of 12 reported cells and T* ranges from 2 to 182 periods. Source: `monitor_regimes.csv`, `monitor_roc.csv`, `monitor_deterrence.csv`; `monitor_roc`, `monitor_Fstar_vs_sigma`, `monitor_Tstar_vs_sigma`.
-- Solver reliability: best-response regimes converge in 89.2% of base-day runs; the largest remaining unilateral gain is $12.39 (0.02% of J_R1). Source: "What we learned".
+Percentages of C_P above are means of daily percentages.
+
+## Superseded results (kept for reference)
+
+- The R1 through R4b_f regime comparison is retained in `regimes_*.csv`, but it was superseded because control, foresight, penalty rules, and information were not separated cleanly.
+- The old information matrix is retained in `matrix_summary*.csv`, but it was superseded because it did not cross the revised F3 and F4 levels.
+- The kappa_K, wind-correlation, and storage-design grid is retained in `sensitivity*.csv`, but it was superseded as a headline result by matched contrasts in the full design matrix.
 
 ## Decisions and deviations log
 
-Sources: `docs/DEVIATIONS.md`, `docs/ASSUMPTIONS.md`.
+Sources: `docs/DEVIATIONS.md`, `docs/ASSUMPTIONS.md`, and `config/base.yaml`.
 
-- 2026-10-21, base site. Anchor Wind (5 ERCOT units, 262 MW) is the base case, the only multi-unit plant with observed co-located storage on the same POI (ANCHOR_BESS1/2). Vortex and Horse Hollow are available as scenario overrides.
-- 2026-10-21, kappa_K. Base changed 0.9 to 0.6. At 0.9 (the LBNL-anchored realistic value) the POI binds in only 18% of hours and R3a = R3b, R4a = R4b on most days; at 0.6 it binds in 49% of hours. 0.9 stays in the sensitivity grid.
-- 2026-10-21, battery calibration. p_ratio 0.29 and duration 1.5 h from the observed Anchor BESS (71.5 MW / 113 MWh vs. 245 MW wind); round-trip efficiency 85% (NREL ATB); degradation cost 10 $/MWh; SoC starts at 50% and must return to it; grid charging allowed.
-- 2026-10-21, information matrix. Own foresight (perfect vs. forecast, `_f`) and information about others (C/G/A/L) were separated into a factorial design after a diagnostic showed they were confounded.
-- 2026-10-21, objective definition. Realized system objective J = raw profit − lambda_minus x under-delivery; lambda_plus is excluded because the realization layer enforces K (pro-rata curtailment). `GameSolution.objective` follows this definition. All gaps lead with J; raw-profit gaps are reported alongside.
-- 2026-10-21, convergence criteria. Game convergence uses the undamped best-response residual (tol_rel 1e-5, max 200 sweeps) and requires the final unilateral deviation gain <= $1.
-- 2026-10-21, solver review fixes. R4 private shortfall weighted by beta_i (capacity share) to match R2 incentives; R4a hour-0 budget floor changed to avoid infeasibility after grid charging; `04_sensitivity.py` runs only non-forecast regimes (no `_f` gaps in the grid).
-- 2026-10-21, forecast-error schema. Forecasts are compared with latest-publication realised HSL (not GEN) normalised by regional max HSL, to avoid curtailment contamination; supersedes DESIGN.md §2 and §5.
-- 2026-10-21, realization layer. A `spill` diagnostic records the degenerate case where pro-rata curtailment is exhausted and a full battery cannot absorb the reduction; the hard POI limit and SoC bounds are preserved.
+- 2026-10-21, base site: Anchor Wind is the base case because it has five wind resources and observed co-located storage at the same site. Vortex and Horse Hollow remain scenario overrides.
+- 2026-10-21, objective: realized J is energy profit less discharge-only degradation cost and the system under-delivery charge. Attempted-overflow penalties remain planning incentives because the realization layer enforces K.
+- 2026-10-21, base POI: kappa_K is 0.6 as a designed stress level; 0.9 remains the empirically anchored comparison value in legacy work.
+- 2026-10-25, revised Part I design: the headline experiment became a 14-cell factorial over F1 control, F2 foresight, F3 penalty allocation, and F4 market information/coordination. The earlier ad hoc regime list is now legacy.
+- 2026-10-25, PRICE mechanism: the congestion price replaces the overflow penalty. Proximal responses use a predictor-corrector update with tau = 2.0, rho = 0.2, at most 60 iterations, relative overflow tolerance 1e-3, and complementary-slackness tolerance $1/hour.
+- 2026-10-25, exact INJ charges: FULL/INJ best responses use the exact convex causal positive-injection overflow charge. INJ shortfall charges use each agent's own deficit, while EQ uses equal shares of system penalties.
 
-## Known limitations / open issues
+## Known limitations
 
-- Single season (Mar–Apr 2025), single base site (Anchor Wind) and 60 episodes; sensitivity uses every 3rd day (20 days).
-- System-level forecast-error sample comes from the October 2026 MIS snapshot (publications 2026-10-13 to 10-20), a different period than the 2025 operating window; the resource-level sample matches the window.
-- Price-taking at RT: no endogenous prices, no two-settlement bidding.
-- MPC regimes use deterministic COP/DA forecasts and *private* delivery commitments D_i, which drive much of the information gap; part of the gap comes from the modelling choice, not from information alone.
-- No outages, causal intent or attacks modelled; the monitor uses static thresholds.
-- Best-response regimes do not converge on about 11% of runs (residual gains are small, <= $12.39); convergence does not imply system optimality.
-- The strategic gap is heavy-tailed; a few days (e.g. 2025-04-26) dominate the mean.
-- The R4a-beats-R2 days (12 of 60) are explained only associatively (less overflow and throughput).
-- No MARL yet.
+- The operating experiment covers one spring window, one base site, five units, and 60 daily episodes.
+- System-level monitor noise is calibrated from an October 2026 rolling MIS snapshot, while the operating experiment uses March-April 2025. The resource-level forecast-error sample matches the operating window.
+- Agents are price takers at RT; the model has no endogenous prices or two-settlement bidding.
+- COP wind and DA price are deterministic forecasts within each receding-horizon solve.
+- The obligation, POI stress level, and penalty rates are designed wargame quantities, not ERCOT tariff rules.
+- FULL outcomes are approximate equilibria and PRICE outcomes are approximate coordinator fixed points. The report places convergence, work, and max_gain diagnostics beside every affected contrast.
+- No outages, causal intent, adaptive monitoring, attacks, or MARL policies are modeled yet.
 
 ## Next steps
 
+### Analytical check
+
+1. Two-player analytical model: verify the hand-solved example numerically. Owner: TBD.
+
 ### Part II: MARL (RQ2)
 
-1. Generalise the environment to a partially observable Markov game with local and aggregate observations (`K − Q_{t−1}`) Owner: TBD.
-2. Implement CTDE and DTDE training on the same episodes, price/wind data and reward (objective J, realization layer) as Part I Owner: TBD.
-3. Evaluate against R1/R2/R4a/R4b on held-out days; report "MARL recovery" of the strategic and information gaps Owner: TBD.
-4. Diagnose learned behaviour (anti-coordination, synchronised charging, cycling) across correlation sets and kappa_K Owner: TBD.
-5. Fix seeds, training budgets and checkpoints in config; log with `.meta.json` Owner: TBD.
+1. Generalize the environment to a partially observable Markov game with local and aggregate observations (`K - Q[t-1]`). Owner: TBD.
+2. Implement CTDE and DTDE training on the same episodes, prices, wind data, objective J, and realization layer as Part I. Owner: TBD.
+3. Evaluate against the centralized and revised decentralized design cells on held-out days; report recovery relative to matched Part I gaps. Owner: TBD.
+4. Diagnose learned behavior, including anti-coordination, synchronized charging, and cycling. Owner: TBD.
+5. Fix seeds, training budgets, and checkpoints in config; log runs with `.meta.json`. Owner: TBD.
 
-### Part III: Monitoring, enforcement, resilience (RQ3)
+### Part III: monitoring, enforcement, and resilience (RQ3)
 
-1. Couple the monitor to simulated agent behaviour: injected withholding m in the episodes, measured q0/q1 per regime Owner: TBD.
-2. Adaptive thresholds and finite correction windows; compare no correction, one-shot fine, finite T*, excessive punishment Owner: TBD.
-3. Attack library: POI derating, biased headroom signal, communication loss Owner: TBD.
-4. Defenses: forecast cross-checking, headroom broadcasts, minimum reserve/SoC rules, limits on simultaneous sanctions; report resilience loss Owner: TBD.
-5. Resolve the forecast-error period mismatch (append new MIS snapshots or use resource-level noise only) Owner: TBD.
+1. Couple the monitor to simulated agent behavior: inject withholding in the episodes and measure q0/q1 by regime. Owner: TBD.
+2. Add adaptive thresholds and finite correction windows; compare no correction, one-shot fines, finite T*, and excessive punishment. Owner: TBD.
+3. Add attacks: POI derating, biased headroom signals, and communication loss. Owner: TBD.
+4. Add defenses: forecast cross-checking, headroom broadcasts, minimum reserve/SoC rules, and limits on simultaneous sanctions; report resilience loss. Owner: TBD.
+5. Resolve the forecast-error period mismatch by appending MIS snapshots or using resource-level noise only. Owner: TBD.
 
 ### Code to add
 
-- `code/wargame/learning/` package (environment wrapper, CTDE/DTDE trainers, policies, evaluation).
-- `code/scripts/07_marl.py` (train/evaluate), `08_monitor_adaptive.py`, `09_attacks.py`.
-- Extend `config/base.yaml` with `learning:` and `attacks:` blocks; scenario overrides in `config/scenarios/`.
-- Tests under `tests/` for the new modules (offline, synthetic); record deviations in `docs/DEVIATIONS.md`.
+- `code/wargame/learning/` for environment wrappers, CTDE/DTDE trainers, policies, and evaluation.
+- New numbered scripts for MARL, adaptive monitoring, and attacks, without reusing existing script numbers.
+- `learning:` and `attacks:` blocks in `config/base.yaml`, with scenario overrides under `config/scenarios/`.
+- Offline synthetic tests for new modules, with implementation departures recorded in `docs/DEVIATIONS.md`.
 
 ## How to update this document
 
-Edit the status table, results and logs whenever a milestone changes, and bump the "Last updated" date in the same commit.
+Update the status table, results, decision log, and date whenever a milestone changes.

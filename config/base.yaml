@@ -62,12 +62,26 @@ information:                            # DESIGNED factorial experiment axes
   forecast_price: pi_DA
   forecast_wind: cop_hsl
 
+design_matrix:                          # REVISED PART I full factorial
+  cells: all                            # "all" or an explicit list of cell ids
+  day_stride: 1
+  price_coordination:
+    proximal_tau: 2.0                   # numerical QP regularizer, $/MWh per MW; grid-selected
+    step_usd_per_mwh_per_mw: 0.2        # constant rho; selected by 3-day grid
+    step_decay: none                    # none | sqrt
+    max_iterations: 60
+    overflow_tol_rel: 1.0e-3            # x sum(N) MW
+    cs_tol_usd: 1.0                     # complementary-slackness tolerance, $/hour
+    warm_start: true
+  game_warm_start: true
+
 game:
   max_sweeps: 200
   tol_rel: 1.0e-5                       # undamped best-response residual max|BR_q - q| / sum(N)
   max_gain_tol: 1.0                     # $ ; converged also requires max unilateral-deviation gain <= this
   damping: 0.5
   deviation_check: true
+  injection_shortfall: own              # own | phi ; INJ agents pay their own private deficit by default
 
 mpc:
   price_info: perfect                   # perfect | forecast; forecast uses DA future, realised RT now

@@ -1,0 +1,18 @@
+{
+  "git_hash": "ad8d3ba88c808daaf15b6a4a1f6f52a46e7d8086",
+  "created_utc": "2026-10-25T22:17:47.697790+00:00",
+  "config_sha256": "2074e85d6efdba31f0c92f3b782074ba8291eb09006e21982f2df60a9a3d92b8",
+  "runtime_s": 268.39719895785674,
+  "rows": 9,
+  "days": [
+    "2025-03-01",
+    "2025-03-02",
+    "2025-04-26"
+  ],
+  "cells": [
+    "D_P_INJ_PRICE",
+    "D_P_EQ_PRICE",
+    "D_F_INJ_PRICE"
+  ],
+  "workers": 3
+}

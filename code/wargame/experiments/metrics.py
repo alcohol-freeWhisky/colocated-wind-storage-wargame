@@ -9,11 +9,18 @@ import numpy as np
 import pandas as pd
 
 from wargame.model.env import Episode
+from wargame.solvers.game import penalty_share_weights
 from wargame.solvers.realize import Realization
 
 
 def episode_metrics(episode: Episode, solution_or_realisation: Any, regime: str) -> dict[str, Any]:
-    """Compute all DESIGN.md section 4 operating metrics for one regime."""
+    """Compute DESIGN.md section 4 operating and penalty-allocation metrics.
+
+    INJ design cells (and central cells, whose primary allocation is INJ) pay
+    ``lambda_minus * (D_i-q_i)^+`` per agent.  EQ and legacy cells continue to
+    allocate the system shortfall through their ex-post weights.  Overflow is
+    allocated by the stored ex-post weights in every cell.
+    """
 
     result = solution_or_realisation
     is_realized = isinstance(result, Realization) or hasattr(result, "q_planned")
@@ -50,7 +57,29 @@ def episode_metrics(episode: Episode, solution_or_realisation: Any, regime: str)
     )
     simultaneous = (c > 1e-6) & (d > 1e-6)
     simultaneous_plan = (c_plan > 1e-6) & (d_plan > 1e-6)
-    return {
+    w_minus = getattr(result, "w_minus", None)
+    w_plus = getattr(result, "w_plus", None)
+    if w_minus is None or w_plus is None:
+        w_minus, w_plus = penalty_share_weights(episode, q, "injection")
+    else:
+        w_minus = np.asarray(w_minus, dtype=float)
+        w_plus = np.asarray(w_plus, dtype=float)
+    is_injection_cell = str(regime).startswith("C_") or "_INJ_" in str(regime)
+    if is_injection_cell:
+        private_delivery = float(poi.get("delta_D", 0.5)) * episode.b
+        penalty_minus = lambda_minus * np.maximum(private_delivery - q, 0.0).sum(
+            axis=1
+        )
+    else:
+        penalty_minus = (w_minus * (lambda_minus * vminus)[None, :]).sum(axis=1)
+    penalty_plus = (w_plus * (lambda_plus * vplus_attempted)[None, :]).sum(axis=1)
+    total_penalty_minus = float(penalty_minus.sum())
+    penalty_concentration = (
+        float(penalty_minus.max() / total_penalty_minus)
+        if total_penalty_minus > 1e-12
+        else 1.0 / episode.N
+    )
+    metrics = {
         "day": episode.day,
         "regime": regime,
         "system_profit_realized": system_profit_realized,
@@ -62,6 +91,10 @@ def episode_metrics(episode: Episode, solution_or_realisation: Any, regime: str)
         "system_profit": system_profit_realized,
         "per_agent_profit": individual.tolist(),
         "per_agent_profit_planned": individual_plan.tolist(),
+        "per_agent_penalty_minus": penalty_minus.tolist(),
+        "per_agent_penalty_plus": penalty_plus.tolist(),
+        "per_agent_net_profit": (individual - penalty_minus).tolist(),
+        "penalty_concentration": penalty_concentration,
         "curtailment_planned_mwh": float(r_plan.sum()),
         "curtailment_realized_mwh": float(r.sum()),
         "throughput_mwh": float((c + d).sum()),
@@ -80,6 +113,23 @@ def episode_metrics(episode: Episode, solution_or_realisation: Any, regime: str)
         "max_gain": getattr(result, "max_gain", None),
         "sweeps_by_hour": getattr(result, "sweeps_by_hour", None),
     }
+    price_converged = getattr(result, "price_converged_by_hour", None)
+    metrics["price_converged_hours_frac"] = (
+        float(np.mean(price_converged)) if price_converged else None
+    )
+    game_converged = getattr(result, "game_converged_by_hour", None)
+    metrics["game_converged_hours_frac"] = (
+        float(np.mean(game_converged)) if game_converged else None
+    )
+    if str(regime).startswith("C_"):
+        equal_minus, equal_plus = penalty_share_weights(episode, q, "equal")
+        metrics["per_agent_penalty_minus_eq"] = (
+            equal_minus * (lambda_minus * vminus)[None, :]
+        ).sum(axis=1).tolist()
+        metrics["per_agent_penalty_plus_eq"] = (
+            equal_plus * (lambda_plus * vplus_attempted)[None, :]
+        ).sum(axis=1).tolist()
+    return metrics
 
 
 def _sum_profit_vector(value: Any) -> float:

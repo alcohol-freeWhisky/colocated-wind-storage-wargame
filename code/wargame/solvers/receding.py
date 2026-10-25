@@ -49,6 +49,25 @@ def forecast_subhorizon(episode: Episode, horizon_start: int) -> Episode:
     )
 
 
+def perfect_subhorizon(episode: Episode, horizon_start: int) -> Episode:
+    """Build the true-data information view from ``horizon_start`` onward."""
+
+    if not 0 <= horizon_start < episode.T:
+        raise ValueError("horizon_start must identify an hour in the episode")
+    return Episode(
+        agents=episode.agents,
+        W=episode.W[:, horizon_start:].copy(),
+        What=episode.What[:, horizon_start:].copy(),
+        b=episode.b[:, horizon_start:].copy(),
+        pi_DA=episode.pi_DA[horizon_start:].copy(),
+        pi_RT=episode.pi_RT[horizon_start:].copy(),
+        K=episode.K,
+        D=episode.D[horizon_start:].copy(),
+        cfg=episode.cfg,
+        day=episode.day,
+    )
+
+
 def _empty_trajectories(episode: Episode) -> tuple[NDArray[np.float64], ...]:
     shape = (episode.N, episode.T)
     return tuple(np.zeros(shape, dtype=float) for _ in range(9))
@@ -70,9 +89,17 @@ def _realization(
     status: str,
     converged: bool | None = None,
     sweeps_by_hour: list[int] | None = None,
+    game_converged_by_hour: list[bool] | None = None,
     max_delta: float | None = None,
     max_gain: float | None = None,
     sweep_log: list[dict[str, float]] | None = None,
+    price_iterations_by_hour: list[int] | None = None,
+    price_converged_by_hour: list[bool] | None = None,
+    price_max_overflow_by_hour: list[float] | None = None,
+    price_max_mu_by_hour: list[float] | None = None,
+    mu_by_hour: NDArray[np.float64] | None = None,
+    w_minus: NDArray[np.float64] | None = None,
+    w_plus: NDArray[np.float64] | None = None,
 ) -> Realization:
     aggregate = q.sum(axis=0)
     aggregate_plan = q_plan.sum(axis=0)
@@ -100,24 +127,40 @@ def _realization(
         max_delta=max_delta,
         max_gain=max_gain,
         sweeps_by_hour=sweeps_by_hour,
+        game_converged_by_hour=game_converged_by_hour,
         sweep_log=sweep_log,
+        price_iterations_by_hour=price_iterations_by_hour,
+        price_converged_by_hour=price_converged_by_hour,
+        price_max_overflow_by_hour=price_max_overflow_by_hour,
+        price_max_mu_by_hour=price_max_mu_by_hour,
+        mu_by_hour=mu_by_hour,
+        w_minus=w_minus,
+        w_plus=w_plus,
     )
 
 
 def solve_receding_central(
     episode: Episode,
     cfg: Mapping[str, Any] | None = None,
+    *,
+    foresight: str = "forecast",
 ) -> Realization:
-    """Execute R1_f, re-solving the forecast central LP every hour."""
+    """Execute a central LP hourly with perfect or forecast information."""
 
     config = episode.cfg if cfg is None else cfg
+    if foresight not in {"perfect", "forecast"}:
+        raise ValueError("foresight must be 'perfect' or 'forecast'")
     q, c, d, r, q_plan, c_plan, d_plan, r_plan, spill = _empty_trajectories(episode)
     soc = np.zeros((episode.N, episode.T + 1), dtype=float)
     terminal = np.asarray([agent.battery.soc0 for agent in episode.agents], dtype=float)
     soc[:, 0] = terminal
 
     for t in range(episode.T):
-        view = forecast_subhorizon(episode, t)
+        view = (
+            perfect_subhorizon(episode, t)
+            if foresight == "perfect"
+            else forecast_subhorizon(episode, t)
+        )
         plan = solve_central(
             view,
             config,
@@ -149,7 +192,7 @@ def solve_receding_central(
         d_plan=d_plan,
         r_plan=r_plan,
         spill=spill,
-        status="R1_f",
+        status="C_P" if foresight == "perfect" else "R1_f",
     )
 
 

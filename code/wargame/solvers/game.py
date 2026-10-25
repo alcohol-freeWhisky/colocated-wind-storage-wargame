@@ -36,6 +36,9 @@ class GameSolution:
     beta_minus: NDArray[np.float64]
     beta_plus: NDArray[np.float64]
     mu: NDArray[np.float64]
+    w_minus: NDArray[np.float64] | None = None
+    w_plus: NDArray[np.float64] | None = None
+    phi: NDArray[np.float64] | None = None
     sweep_log: list[dict[str, float]] = field(default_factory=list)
     objective_with_plus_penalty: float = float("nan")  # objective - lambda_plus*sum V^+
 
@@ -55,6 +58,42 @@ def beta_weights(episode: Episode, rule: str | ArrayLike) -> NDArray[np.float64]
     if rule == "full":
         return np.ones(episode.N)
     raise ValueError("beta rule must be 'capacity_share', 'equal', or 'full'")
+
+
+def penalty_share_weights(
+    episode: Episode,
+    q: ArrayLike,
+    rule: str,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Return ex-post shortfall and overflow weights by agent and hour.
+
+    Injection weights use positive injection for overflow and normalized
+    private deficits for the retained diagnostic.  INJ shortfall charges no
+    longer use that diagnostic: each agent pays its full private deficit.
+    Either zero denominator falls back to equal weights for that hour.
+    """
+
+    profile = np.asarray(q, dtype=float)
+    if profile.shape != (episode.N, episode.T):
+        raise ValueError(f"q must have shape {(episode.N, episode.T)}")
+    if rule == "equal":
+        equal = np.full_like(profile, 1.0 / episode.N)
+        return equal.copy(), equal
+    if rule != "injection":
+        raise ValueError("share_rule must be 'injection' or 'equal'")
+
+    positive = np.maximum(profile, 0.0)
+    private_delivery = float(episode.cfg.get("poi", {}).get("delta_D", 0.5)) * episode.b
+    shortfall = np.maximum(private_delivery - profile, 0.0)
+
+    def normalize(values: NDArray[np.float64]) -> NDArray[np.float64]:
+        denominator = values.sum(axis=0)
+        weights = np.full_like(values, 1.0 / episode.N)
+        active = denominator > 1e-12
+        weights[:, active] = values[:, active] / denominator[active]
+        return weights
+
+    return normalize(shortfall), normalize(positive)
 
 
 def _remove_damped_cycles(
@@ -85,21 +124,41 @@ def _agent_payoff(
     c: NDArray[np.float64],
     d: NDArray[np.float64],
     r: NDArray[np.float64],
-    beta_minus: float,
-    beta_plus: float,
+    beta_minus: ArrayLike,
+    beta_plus: ArrayLike,
     mu: NDArray[np.float64],
     cfg: Mapping[str, Any],
+    *,
+    private_delivery: NDArray[np.float64] | None = None,
+    causal_overflow: bool = False,
 ) -> float:
     aggregate = q.sum(axis=0)
-    vminus = np.maximum(episode.D - aggregate, 0.0)
+    vminus = np.maximum(
+        episode.D - aggregate if private_delivery is None else private_delivery - q[i],
+        0.0,
+    )
     vplus = np.maximum(aggregate - episode.K, 0.0)
     poi = cfg.get("poi", {})
     eps_tiebreak = float(cfg.get("battery", {}).get("eps_tiebreak_usd_per_mwh", 1e-3))
+    if causal_overflow:
+        positive = np.maximum(q, 0.0)
+        denominator = positive.sum(axis=0)
+        overflow_share = np.full(episode.T, 1.0 / episode.N)
+        active = denominator > 1e-12
+        overflow_share[active] = positive[i, active] / denominator[active]
+        overflow_charge = float(poi.get("lambda_plus", 100.0)) * float(
+            overflow_share @ vplus
+        )
+    else:
+        overflow_charge = float(poi.get("lambda_plus", 100.0)) * float(
+            np.asarray(beta_plus, dtype=float) @ vplus
+        )
     return float(
         (episode.pi_RT - mu) @ q[i]
         - episode.agents[i].battery.c_deg * d[i].sum()
-        - beta_minus * float(poi.get("lambda_minus", 250.0)) * vminus.sum()
-        - beta_plus * float(poi.get("lambda_plus", 100.0)) * vplus.sum()
+        - float(poi.get("lambda_minus", 250.0))
+        * float(np.asarray(beta_minus, dtype=float) @ vminus)
+        - overflow_charge
         - eps_tiebreak * (c[i] + d[i] + r[i]).sum()
     )
 
@@ -115,6 +174,7 @@ def solve_game(
     initial_soc: ArrayLike | None = None,
     terminal_soc: ArrayLike | None = None,
     initial_plan: Any | None = None,
+    share_rule: str | None = None,
 ) -> GameSolution:
     """Compute a damped Gauss--Seidel best-response fixed point.
 
@@ -125,6 +185,14 @@ def solve_game(
     only if the residual is below ``game.tol_rel * sum(N)`` and the final
     unilateral-deviation gain is at most ``game.max_gain_tol`` dollars.
     ``max_delta`` reports the undamped residual of the last sweep.
+
+    Under injection sharing, every agent pays for its own private shortfall by
+    default, and its overflow charge is the exact causal-share expression
+    ``lambda_plus * q_i^+ * (Q-K)^+ / sum_j q_j^+``.  Thus INJ FULL is a Nash
+    equilibrium of the exact causal-share game, without lagged-share
+    linearization.  The optional ``injection_shortfall="phi"`` compatibility
+    mode retains E2's lagged scalar on private deficits.  Equal sharing and
+    legacy beta rules retain their linear system-shortfall formulations.
     """
 
     config = episode.cfg if cfg is None else cfg
@@ -137,6 +205,8 @@ def solve_game(
     eps_tiebreak = float(config.get("battery", {}).get("eps_tiebreak_usd_per_mwh", 1e-3))
     bminus = beta_weights(episode, beta if beta_minus is None else beta_minus)
     bplus = beta_weights(episode, beta if beta_plus is None else beta_plus)
+    if share_rule not in {None, "injection", "equal"}:
+        raise ValueError("share_rule must be None, 'injection', or 'equal'")
     dual_price = np.zeros(episode.T) if mu is None else np.asarray(mu, dtype=float)
     if dual_price.shape != (episode.T,) or np.any(dual_price < -1e-8):
         raise ValueError("mu must be a non-negative length-T vector")
@@ -160,7 +230,32 @@ def solve_game(
         c, d, r = (array.copy() for array in arrays)
         r = np.minimum(np.maximum(r, 0.0), episode.W)
     q = episode.W - r - c + d
-    models = [AgentLP(agent, episode.T, config) for agent in episode.agents]
+    private_shortfall = share_rule == "injection"
+    models = [
+        AgentLP(
+            agent,
+            episode.T,
+            config,
+            shortfall_mode="private" if private_shortfall else "system",
+            overflow_mode="causal" if private_shortfall else "shared",
+        )
+        for agent in episode.agents
+    ]
+    private_delivery = (
+        float(config.get("poi", {}).get("delta_D", 0.5)) * episode.b
+        if private_shortfall
+        else None
+    )
+
+    def shortfall_phi(profile: NDArray[np.float64]) -> NDArray[np.float64]:
+        if private_delivery is None:
+            raise RuntimeError("phi is defined only for injection sharing")
+        denominator = np.maximum(private_delivery - profile, 0.0).sum(axis=0)
+        numerator = np.maximum(episode.D - profile.sum(axis=0), 0.0)
+        phi = np.ones(episode.T, dtype=float)
+        active = denominator > 1e-12
+        phi[active] = numerator[active] / denominator[active]
+        return np.clip(phi, 0.0, 1.0)
     terminal_rule = str(config.get("battery", {}).get("terminal_soc", "return"))
     allow_grid = bool(config.get("battery", {}).get("allow_grid_charging", True))
     profile_feasible = np.asarray(
@@ -185,21 +280,54 @@ def solve_game(
     max_delta = np.inf
     sweeps_done = 0
 
+    # "phi": causal share of the system shortfall (lagged scalar phi);
+    # "own": each agent pays lambda_minus on its own private deficit (weight 1).
+    injection_shortfall = str(game_cfg.get("injection_shortfall", "own"))
+    if injection_shortfall not in {"phi", "own"}:
+        raise ValueError("game.injection_shortfall must be 'phi' or 'own'")
+
     for sweep in range(1, max_sweeps + 1):
         residual = 0.0
         for i, model in enumerate(models):
             q_other = q.sum(axis=0) - q[i]
+            if share_rule is None:
+                minus_weight: float | NDArray[np.float64] = float(bminus[i])
+                plus_weight: float | NDArray[np.float64] = float(bplus[i])
+                delivery = episode.D
+                others_positive = None
+                others_sum = None
+            elif share_rule == "injection":
+                current_phi = shortfall_phi(q)
+                minus_weight = (
+                    current_phi
+                    if injection_shortfall == "phi"
+                    else np.ones(episode.T)
+                )
+                plus_weight = np.zeros(episode.T)
+                delivery = private_delivery[i]
+                others_positive = (
+                    np.maximum(q, 0.0).sum(axis=0) - np.maximum(q[i], 0.0)
+                )
+                others_sum = q_other
+            else:
+                minus_weight = np.full(episode.T, 1.0 / episode.N)
+                plus_weight = np.full(episode.T, 1.0 / episode.N)
+                delivery = episode.D
+                others_positive = None
+                others_sum = None
             best = model.solve(
                 W=episode.W[i],
                 prices=episode.pi_RT,
                 q_other=q_other,
                 K=episode.K,
-                D=episode.D,
-                beta_minus=float(bminus[i]),
-                beta_plus=float(bplus[i]),
+                D=delivery,
+                beta_minus=minus_weight,
+                beta_plus=plus_weight,
                 mu=dual_price,
                 initial_soc=float(start_soc[i]),
                 terminal_soc=float(target_soc[i]),
+                others_positive=others_positive,
+                others_sum=others_sum,
             )
             residual = max(residual, float(np.max(np.abs(best.q - q[i]))))
             step = damping if profile_feasible[i] else 1.0
@@ -231,23 +359,66 @@ def solve_game(
         ]
     )
 
+    final_w_minus: NDArray[np.float64] | None = None
+    final_w_plus: NDArray[np.float64] | None = None
+    if share_rule is not None:
+        final_w_minus, final_w_plus = penalty_share_weights(episode, q, share_rule)
+    final_phi = shortfall_phi(q) if private_shortfall else None
+
     max_gain = 0.0
     if bool(game_cfg.get("deviation_check", True)):
         for i, model in enumerate(models):
+            if private_shortfall:
+                minus_weight = (
+                    final_phi if injection_shortfall == "phi" else np.ones(episode.T)
+                )
+                delivery = private_delivery[i]
+                plus_weight = np.zeros(episode.T)
+                others_positive = (
+                    np.maximum(q, 0.0).sum(axis=0) - np.maximum(q[i], 0.0)
+                )
+                others_sum = aggregate - q[i]
+            else:
+                minus_weight = (
+                    np.full(episode.T, float(bminus[i]))
+                    if final_w_minus is None
+                    else final_w_minus[i]
+                )
+                delivery = episode.D
+                plus_weight = (
+                    np.full(episode.T, float(bplus[i]))
+                    if final_w_plus is None
+                    else final_w_plus[i]
+                )
+                others_positive = None
+                others_sum = None
             current = _agent_payoff(
-                episode, i, q, c, d, r, float(bminus[i]), float(bplus[i]), dual_price, config
+                episode,
+                i,
+                q,
+                c,
+                d,
+                r,
+                minus_weight,
+                plus_weight,
+                dual_price,
+                config,
+                private_delivery=delivery if private_shortfall else None,
+                causal_overflow=private_shortfall,
             )
             deviation = model.solve(
                 W=episode.W[i],
                 prices=episode.pi_RT,
                 q_other=aggregate - q[i],
                 K=episode.K,
-                D=episode.D,
-                beta_minus=float(bminus[i]),
-                beta_plus=float(bplus[i]),
+                D=delivery,
+                beta_minus=minus_weight,
+                beta_plus=plus_weight,
                 mu=dual_price,
                 initial_soc=float(start_soc[i]),
                 terminal_soc=float(target_soc[i]),
+                others_positive=others_positive,
+                others_sum=others_sum,
             )
             max_gain = max(max_gain, deviation.objective - current)
     max_gain = float(max(max_gain, 0.0))
@@ -277,6 +448,9 @@ def solve_game(
         beta_minus=bminus,
         beta_plus=bplus,
         mu=dual_price,
+        w_minus=final_w_minus,
+        w_plus=final_w_plus,
+        phi=final_phi,
         sweep_log=history,
     )
 

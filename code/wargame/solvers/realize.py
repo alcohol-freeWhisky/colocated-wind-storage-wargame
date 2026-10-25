@@ -38,7 +38,15 @@ class Realization:
     max_delta: float | None = None
     max_gain: float | None = None
     sweeps_by_hour: list[int] | None = None
+    game_converged_by_hour: list[bool] | None = None
     sweep_log: list[dict[str, float]] | None = None
+    price_iterations_by_hour: list[int] | None = None
+    price_converged_by_hour: list[bool] | None = None
+    price_max_overflow_by_hour: list[float] | None = None
+    price_max_mu_by_hour: list[float] | None = None
+    mu_by_hour: NDArray[np.float64] | None = None
+    w_minus: NDArray[np.float64] | None = None
+    w_plus: NDArray[np.float64] | None = None
 
     @property
     def objective(self) -> float:

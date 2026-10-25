@@ -12,15 +12,15 @@ Everything here was decided by the project lead; implementers should follow it a
 ├── requirements.txt          pinned in requirements.lock.txt ; venv in .venv/
 ├── config/
 │   ├── base.yaml             all default parameters (empirical inputs vs designed wargame variables are labelled)
-│   └── scenarios/*.yaml      overrides for sensitivity runs
+│   └── scenarios/*.yaml      optional site and experiment overrides
 ├── code/
 │   ├── wargame/              importable package (`import wargame`, add code/ to sys.path or pip install -e code/)
 │   │   ├── data/             ercot.py, eia.py, build_dataset.py   (raw -> processed)
 │   │   ├── model/            physics.py (battery/POI), env.py (episode container, info masking)
 │   │   ├── solvers/          central.py, game.py (best-response Nash), mpc.py (limited info), realize.py
 │   │   ├── monitor/          calibration.py (forecast-error regimes), detection.py (q0,q1,F*,T*)
-│   │   └── experiments/      run_regimes.py, sensitivity.py, metrics.py, plots.py
-│   └── scripts/              numbered CLI entry points 01_download_raw.py ... 06_make_report.py
+│   │   └── experiments/      design.py, run_episode.py, metrics.py, io.py, plots.py
+│   └── scripts/              numbered CLI entry points 01_download_raw.py ... 07_design_matrix.py
 ├── data/
 │   ├── raw/                  untouched downloads (ercot/, eia/, nrel/); never edited by hand
 │   ├── interim/              per-day extracted tables (parquet)
@@ -50,7 +50,7 @@ Python: `.venv/bin/python` (3.13). Libraries: numpy, pandas, scipy, cvxpy (defau
 | `b[i,t]` (DA award) | ERCOT 60-Day DAM Disclosure (NP3-966-ER), `dam_gen_resource` | `get_60_day_dam_disclosure(date)["dam_gen_resource"]`, cols `Interval Start, Resource Name, Resource Type, HSL, Awarded Quantity, Settlement Point Name, Energy Settlement Point Price` | most wind has no DAM award (NaN) → baseline rule: `b = Awarded Quantity` if > 0 else `b = What` (COP HSL). Store both. |
 | forecast-error regimes (system/regional) | ERCOT Wind Power Production – Hourly Averaged Actual and Forecasted Values (NP4-732-CD) and by Geographical Region (NP4-742-CD) | MIS keeps only a rolling ~8-day window; snapshot already saved in `data/raw/ercot/wind_forecast_hourly/*.parquet` and `.../wind_forecast_region_hourly/*.parquet` (2026-10-13..20, one file per publish day, 24 publications/day, each 216 hourly rows: 48 h actual GEN + 168 h STWPF/WGRPP forecast) | build error-vs-horizon table: for each publication, horizon h = Interval Start − Publish Time; error = (STWPF − GEN)/HSL_SYSTEM_WIDE using the GEN that appears in later publications for the same interval. Columns: `GEN SYSTEM WIDE, STWPF SYSTEM WIDE, WGRPP SYSTEM WIDE, HSL SYSTEM WIDE`, and `GEN/STWPF/WGRPP LZ WEST` etc. |
 | asset metadata | EIA-860 2023 | `https://www.eia.gov/electricity/data/eia860/archive/xls/eia8602023.zip` (verified 206 on range request). Sheets: `3_2_Wind_Y2023.xlsx`, `3_4_Energy_Storage_Y2023.xlsx`, `3_1_Generator_Y2023.xlsx` | TX wind nameplate for the selected plant (Horse Hollow, Callahan/Taylor County); distribution of BESS duration (MWh/MW) and BESS-to-wind power ratio for co-located TX hybrids (same Plant Code having both wind and storage) |
-| battery tech params | NREL ATB 2024 utility-scale battery (cite), no download needed | round-trip efficiency 85 % ⇒ η_c = η_d = sqrt(0.85) ≈ 0.922; degradation/cycling cost C_deg = 10 $/MWh discharged (assumption, sensitivity 5–20) | put values + citation in `config/base.yaml`, flagged `source: calibrated_from_observed_colocated_bess` |
+| battery tech params | NREL ATB 2024 utility-scale battery (cite), no download needed | round-trip efficiency 85 % ⇒ η_c = η_d = sqrt(0.85) ≈ 0.922; degradation cost C_deg = 10 $/MWh discharged, charged on `d` only rather than total charge-plus-discharge throughput | put values + citation in `config/base.yaml`, flagged `source: calibrated_from_observed_colocated_bess` |
 
 Operating-day window: 2025-03-01 … 2025-04-30 (61 days; spring = high wind, frequent West-hub negative prices, strong price volatility). Prices for year 2025.
 
@@ -58,7 +58,7 @@ Wind resource pool (all 5-min SCED rows for these resources are kept in interim 
 
 - Primary site (N = 5 agents, decided 2026-10-21): Anchor Wind. `ANCHOR_WIND1..5` (DME YENELT, Enel; ≈262 MW: sum of p99.5 nameplates over the window; 245.1 MW is the 2025-04-15 COP HSL used for the p_ratio calibration), a real wind plant with two observed co-located batteries `ANCHOR_BESS1/2` (71.5 MW / 113 MWh from the ERCOT COP snapshot) sharing the same POI; battery sizing in config is calibrated to this. Alternative sites in `config/scenarios/`: Vortex (4 units + observed 121.8 MW / 184 MWh BESS) and Horse Hollow (below, no observed storage).
 - Secondary site: Horse Hollow. `HHGT_HHOLLOW1, HHGT_HHOLLOW2, HHGT_HHOLLOW3, HHGT_HHOLLOW4, HHGT_CALLAHAN` (DME YHHGT; QSEs QFPLE1/QFPL14/QFPLE3; ≈806 MW HSL max on 2025-04-15).
-- Correlation pool (for ρ sensitivity, mixing units from different sites): `CAPRIDGE_CR1..CR3`, `ANCHOR_WIND1..5`, `VERAWIND_UNIT1..5`, `WHMESA_UNIT1, WHMESA_UNIT2_23, WHMESA_UNIT2_28, WHMESA_UNIT3_23, WHMESA_UNIT3_28`, `VORTEX_WIND1..4`, `LACY_CRK_UNIT1..4`, `CANYONWD_UNIT1..6`.
+- Legacy correlation pool retained for reference: `CAPRIDGE_CR1..CR3`, `ANCHOR_WIND1..5`, `VERAWIND_UNIT1..5`, `WHMESA_UNIT1, WHMESA_UNIT2_23, WHMESA_UNIT2_28, WHMESA_UNIT3_23, WHMESA_UNIT3_28`, `VORTEX_WIND1..4`, `LACY_CRK_UNIT1..4`, `CANYONWD_UNIT1..6`.
 - Resource nameplate `N_i` := 99.5th percentile of hourly HSL over the window (robust to telemetry spikes); store also max.
 
 ## 2. Processed dataset (`data/processed/`)
@@ -81,7 +81,7 @@ Per agent i (wind + co-located battery with fixed E_i [MWh], P_i [MW]): decision
 Grid charging allowed by default (`allow_grid_charging: true`, i.e. q may be negative); if false add `c ≤ W - r`.
 Simultaneous charge+discharge is not forbidden by an LP. A tiny configurable tie-break cost `eps_tiebreak_usd_per_mwh` on `c + d + r` (default 1e-3 $/MWh) selects curtailment over otherwise-free cycling; report simultaneous operation as a diagnostic.
 
-Battery design (designed scenario variable, calibrated to the observed Anchor BESS, cross-checked with EIA-860 and LBNL ranges): `P_i = p_ratio * N_i`, `E_i = duration_h * P_i`, defaults `p_ratio = 0.29`, `duration_h = 1.5`; sensitivity over {0.10, 0.29, 0.50} × {1.0, 1.5, 4.0} (see `config/base.yaml`).
+Battery design (calibrated to the observed Anchor BESS and cross-checked with EIA-860 and LBNL ranges): `P_i = p_ratio * N_i`, `E_i = duration_h * P_i`, with `p_ratio = 0.29` and `duration_h = 1.5` in the headline matrix.
 
 Shared POI: `Q[t] = Σ_i q[i,t]`; `K = kappa_K * Σ_i N_i` (designed, default kappa_K = 0.6 (designed stress level; 0.9 is the LBNL-anchored value, see docs/ASSUMPTIONS.md §4));
 minimum delivery `D[t] = delta_D * Σ_i b[i,t]` (designed, default delta_D = 0.5).
@@ -89,28 +89,71 @@ Soft violations `Vminus = max(D - Q, 0)`, `Vplus = max(Q - K, 0)`; penalty price
 
 Settlement price for injections: `pi[t] = pi_RT[t]` (agents are price takers at RT; DA price is kept for descriptive statistics and for Workshop 2 DA/RT two-settlement extension).
 
-Agent payoff: `U_i = Σ_t [ pi[t]*q[i,t] - C_deg*d[i,t] ]`, coordinated variant
+Agent payoff: `U_i = Σ_t [ pi[t]*q[i,t] - C_deg*d[i,t] ]`, where degradation is charged on discharge `d` only, matching `agent_lp.py` and `central.py`. The coordinated variant is
 `U_i_coord = U_i - beta_minus[i]*lambda_minus*Vminus[t] - beta_plus[i]*lambda_plus*Vplus[t]`, `beta_i = N_i/Σ N` by default (config: `"capacity_share" | "equal" | "full"`).
 
 Physical realization layer (`solvers/realize.py`): whatever the agents *plan*, the POI controller cannot export more than K. Given planned q, realized injection `q_real = q - share_i * Vplus` with pro-rata (by q⁺) curtailment, SoC is re-simulated with the realized r (extra curtailment), and realized profit uses q_real. Report both *planned* violations (what the strategic layer attempted) and *realized* quantities. The central solution has Vplus = 0 by construction (hard constraint).
 
-## 4. Operating regimes (Part I, Workshop 1 scope)
+## 4. Design matrix (Part I headline experiment)
 
-| id | regime | information | solver |
-|---|---|---|---|
-| R1 | centralized oracle | full state, perfect foresight over the episode | one LP, hard `Q ≤ K`, soft D with lambda_minus |
-| R1_f | forecast centralized | full state across agents; realised current-hour wind/RT price and COP-wind/DA-price forecasts thereafter | receding-horizon central LP over `t..T-1`; execute hour `t`, realize, and re-plan; the end-of-episode SoC target is unchanged |
-| R2 | full-information selfish game | each agent sees everything (all W, SoC, prices) and others' current plans | Gauss–Seidel best response: agent i solves its LP given q_{-i}, payoff U_i_coord with `beta_plus` = capacity share of λ⁺ penalty and `beta_minus` = capacity share; iterate until max |Δq| < 1e-3·ΣN or 50 sweeps; damping 0.5. Also verify the fixed point is a Nash eq. by one final unilateral-deviation check (report max gain). Record non-convergence. |
-| R2_f | forecast full-information game | all agents see one another's plans; current-hour own wind/RT price are realised and future own wind/price use COP/DA forecasts | re-run the remaining-horizon Gauss–Seidel game each hour, warm-started from the prior plan tail; execute and realize hour `t`; log sweeps by hour |
-| R3 | coordinated decentralized game | as R2 plus a coordinator broadcast | R2 but `beta = full` (each agent internalizes the whole shared penalty) and a headroom price: the coordinator adds to each agent's objective `- mu[t]*q[i,t]` where `mu[t]` is the dual of `Q ≤ K` from R1 (price-based coordination). Report both sub-variants R3a (penalty only), R3b (penalty + dual price). |
-| R4a | limited information, aggregate | agent i sees own state and the aggregate signal `headroom[t-1] = K - Q[t-1]`; by default, own future RT prices and W are perfect (`mpc.price_info = wind_info = perfect`) | receding-horizon MPC each hour: own LP over remaining horizon with a private POI budget `q[i,t] ≤ max(0, headroom[t-1]) + q_real[i,t-1]`-style estimate (persistence of last headroom) |
-| R4b | limited information, local | as R4a but no aggregate signal; agent assumes a fixed POI budget `K * N_i/ΣN` | same MPC |
-| R4a_f | forecast-information aggregate | R4a with DA prices for future RT prices and own COP HSL for future W; current-hour RT price and W are realized | same MPC |
-| R4b_f | forecast-information local | R4b with the same forecast information as R4a_f | same MPC |
+The revised headline experiment is a full factorial over four design factors. The earlier regimes `R1` through `R4b_f`, their scripts, and their outputs are retained as legacy results for backward compatibility, but the revised matrix supersedes them for headline Part I results.
 
-The factorial information matrix has rows `C` (central), `G` (full-information game), `A` (aggregate-headroom MPC), and `L` (local MPC), and columns `perfect` and `forecast`. Its canonical regime ordering everywhere is `R1, R1_f, R2, R2_f, R3a, R3b, R4a, R4a_f, R4b, R4b_f`; R3a/R3b remain additional perfect-foresight coordination rows outside the 4×2 matrix.
+- **F1 control:** `C` is centralized and `D` is decentralized. Central control is crossed only with foresight; penalty allocation and market information do not apply to it.
+- **F2 foresight:** `P` uses true available wind and true RT prices throughout the remaining horizon. `F` uses true wind and RT price in the current hour and COP wind plus DA price thereafter.
+- **F3 penalty allocation (D only):** `INJ` uses causal injection overflow shares and own-deficit shortfall charges; `EQ` uses equal shares.
+- **F4 market information (D only):** `FULL` observes the other agents' current plans, `PRICE` observes only a coordinator's congestion price, and `NONE` observes neither.
 
-All decentralized regimes end with the realization layer. Metrics per episode and regime (`experiments/metrics.py`): system profit (realized), individual profit vector, wind curtailment MWh (planned & realized), battery throughput MWh, under-delivery MWh `ΣVminus`, POI violation attempted MWh `ΣVplus` and #hours, simultaneous charge/discharge hours, convergence info. Gaps: `strategic_gap = J_R1 - J_R2`; `info_gap_aggregate = J_R2 - J_R4a`; `info_gap_local = J_R2 - J_R4b`; `signal_value = J_R4a - J_R4b`; `forecast_gap_central = J_R1 - J_R1_f`; `forecast_gap_game = J_R2 - J_R2_f`; `forecast_gap_mpc = J_R4a - J_R4a_f`; `PoA = J_R1 / J_R2`; and `PoA_f = J_R1_f / J_R2_f`.
+The 14 canonical cells are `C_P`, `C_F`, followed by `D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}` ordered by foresight, penalty share, and information. `experiments/design.py` provides this `CELL_ORDER` and the validating `parse_cell` function.
+
+Every cell is an hourly receding-horizon policy. At hour `t`, each applicable decision maker solves over `t..T-1` with the selected information, only hour `t` is submitted, the joint action passes through `realize_hour`, and the realized SOC initializes hour `t+1`. An episode is one 24-hour operating day. The initial SOC is `soc0`, and every remaining-horizon optimization retains the existing `terminal_soc: return` constraint.
+
+For `INJ`, the budget-balanced hourly overflow weight is
+
+`w^+_it = q^+_it / Σ_j q^+_jt`
+
+with a `1/N` fallback when the denominator is zero. Each agent's shortfall
+charge is instead
+
+`lambda_minus * (D_it - q_it)^+`, where `D_it = delta_D * b_it`.
+
+Thus total INJ shortfall collection is
+`lambda_minus * Σ_i (D_it-q_it)^+`, which is at least the system-shortfall
+charge and is not the old rule that charged the full system shortfall N times.
+The optional `game.injection_shortfall: phi` setting retains the E2
+compatibility rule, but `own` is the default. Under `EQ`, both system-penalty
+weights are always `1/N`.
+
+In the FULL/INJ game, fix the other agents' plans and define
+`P_t = Σ_{j != i} q^+_jt`, `S_t = Σ_{j != i} q_jt`, and
+`c_t = P_t-S_t+K`. Agent i optimizes the exact causal overflow charge
+
+`lambda_plus * q^+_it * (Q_t-K)^+ / (q^+_it+P_t)`.
+
+The DPP-convex formulation uses `x_t >= q_it`, `x_t >= 0`,
+`y_t = x_t+P_t`, and
+`lambda_plus * pos(x_t-c_t+c_t*P_t*inv_pos(y_t))`. Clarabel solves these
+causal conic best responses; all other agent models retain their existing LP
+or QP solver. No lagged overflow weights enter the INJ game. Its deviation
+check evaluates the same exact charge, so a converged INJ FULL cell is a Nash
+equilibrium of the exact causal-share game rather than a linearized game. The
+previous hour's plan tail still warm-starts the next hourly game. FULL/EQ
+retains exact equal-weight system-shortfall and system-overflow terms.
+
+Under PRICE, the overflow penalty is replaced by a congestion price: each agent solves with `beta_plus = 0`, `q_other = 0`, and the common nonnegative vector `mu`, with no private POI budget. Starting from the prior hour's price tail (zeros at hour 0), `q^0` is the unregularized response and iteration `k` uses the proximal response
+
+`max u_i(q_i; mu^{k-1}) - (proximal_tau/2) * sum_t (q_it-q_it^{k-1})^2`.
+
+The quadratic term is solely a numerical fixed-point device and is excluded from economic costs and reported objectives. A predictor-corrector evaluation of the same proximal QPs damps the otherwise neutral primal-dual oscillation (documented in `DEVIATIONS.md`). The corrected aggregate updates
+
+`mu^k_t = max(0, mu^{k-1}_t + rho_k * (Q_t - K))`, with constant `rho_k = rho` by default; `step_decay: sqrt` retains `rho/sqrt(k)` as an optional compatibility mode.
+
+The coordinator stops when `max_t (Q_t-K)^+ <= overflow_tol_rel * ΣN`, `max_t mu_t * (K-Q_t)^+ <= cs_tol`, and either the infinity-norm price change is at most `$0.01/MWh` or the aggregate-injection change is within the overflow tolerance, or after `max_iterations`. It retains the last iterate on convergence; otherwise it retains the iterate with the smallest maximum overflow, breaking ties by the larger sum of agent objectives. The grid-selected defaults are `proximal_tau = 2.0`, constant `rho = 0.2`, 60 iterations, relative overflow tolerance `1e-3`, complementary-slackness tolerance `$1/hour`, and hourly price-tail warm starts. Per-hour diagnostics include iterations, convergence, final maximum overflow, and final maximum `mu`; by-day metrics include `price_converged_hours_frac`. The realization layer still applies pro-rata cuts to any remaining attempted overflow.
+
+Under NONE, agent `i` has the fixed private budget `B_i = K * N_i / Σ_j N_j` in every remaining hour; the current-hour lower floor accounts for feasible grid charging as in `_budget_vector`. PRICE and NONE agents cannot compute system shortfall. They instead optimize against private shortfall `D_it`: the shortfall penalty weight is exactly 1 under INJ (the agent pays what it causes) and `1/N` under EQ (the anticipated equal split). This follows from the allocation rule and is not a tuning parameter.
+
+Penalty allocations reported in the revised results are computed ex post from realized quantities. The primary per-agent fields use the cell's F3 rule; central cells use INJ as primary and also report the EQ allocation. INJ shortfall charges are `Σ_t lambda_minus (D_it-q_tilde_it)^+`, exactly what each agent pays under the own-deficit rule. EQ shortfall charges remain `Σ_t (1/N) lambda_minus Vminus_t`. Overflow allocation is unchanged at `Σ_t w^+_it lambda_plus Vplus_attempted_t` and remains budget balanced. Metrics add `per_agent_penalty_minus`, `per_agent_penalty_plus`, `per_agent_net_profit` (energy profit less allocated shortfall penalty), and `penalty_concentration`, the largest agent share of total shortfall charges (or `1/N` when the total is zero). System objective `J = profit - lambda_minus * Σ_t Vminus_t` is unchanged.
+
+`code/scripts/07_design_matrix.py` writes `design_matrix_by_day.csv`, `design_matrix_summary.csv`, `design_matrix_effects.csv`, and `design_matrix_pivot.csv` under `results/tables/`, plus `design_<day>_<cell>.csv` trajectories. It writes `fig_design_matrix.png/.pdf`, `fig_design_effects.png`, and `results/logs/design_matrix.log`. Every CSV has the standard sibling metadata JSON.
 
 ## 5. Monitor calibration (Part III preliminary, Workshop 1 scope)
 
@@ -123,13 +166,33 @@ Deterrence: `F_star = g*(delta**(-d) - q1)/Delta_q` (one-shot deviation, gain g,
 
 1. `01_download_raw.py`: prices (2025), SCED/DAM/COP for every day in the window (skip if file exists), EIA-860 zip; writes per-day parquet into `data/interim/` (only WIND rows + the needed columns) and logs failures in `results/logs/download.log`. Must be resumable.
 2. `02_build_dataset.py`: builds every table in §2 and `data/processed/README.md`.
-3. `03_run_regimes.py`: base case (Anchor Wind, 5 agents, defaults) for all days: all regimes → `results/tables/regimes_by_day.csv`, `regimes_summary.csv`, per-day trajectories for a few illustrative days in `results/tables/trajectories/`.
-4. `04_sensitivity.py`: grid over kappa_K × agent sets (3 sets chosen from the pool at low / medium / high mean pairwise ρ, documented in `results/tables/agent_sets.csv`) × storage designs, on a 20-day subset (every 3rd day) → `results/tables/sensitivity.csv`.
+3. `03_run_regimes.py`: legacy Workshop 1 v1 regime runner; retained for reference and superseded by the design matrix.
+4. `04_sensitivity.py`: legacy Workshop 1 v1 parameter grid; retained for reference and superseded by the design matrix.
 5. `05_monitor.py`: §5 outputs → `results/tables/monitor_*.csv`, figures.
-6. `06_make_report.py`: assembles `docs/workshop1/report.md` with the headline tables and figure links; figures via `experiments/plots.py` (matplotlib, one figure per file, labelled axes with units).
+6. `06_make_report.py`: assembles the matrix-centered `docs/workshop1/report.md` and `.html`, including factor contrasts, solver diagnostics, operating metrics, and the illustrative trajectory.
+7. `07_design_matrix.py`: runs the 14 cells and writes `design_matrix_by_day.csv`, `design_matrix_summary.csv`, `design_matrix_effects.csv`, `design_matrix_pivot.csv`, design trajectories, and design figures.
 
 Reproducibility: every script accepts `--config config/base.yaml` and optional `--scenario`; random seeds fixed; each results table gets a sibling `.meta.json` with git hash, timestamp, config hash.
 
 ## 7. Testing
 
 `tests/` with synthetic 2-agent, 6-hour cases: (i) battery dynamics feasibility; (ii) central LP equals brute-force on a tiny instance; (iii) best-response fixed point is a Nash eq. (unilateral deviation check); (iv) realization layer never exports above K and conserves energy; (v) monitor formulas on closed-form Gaussian cases (q0 = 1-Φ(τ/σ)). `pytest tests/` must pass offline.
+
+## Appendix A. Legacy regimes (Workshop 1 v1)
+
+The following regime list, its information matrix, scripts 03/04, and `regimes_*`, `matrix_summary*`, and `sensitivity*` outputs are retained for backward compatibility. They are superseded by the design matrix above and are not headline Part I results.
+
+| id | regime | information | solver |
+|---|---|---|---|
+| R1 | centralized oracle | full state, perfect foresight over the episode | one LP, hard `Q ≤ K`, soft D with lambda_minus |
+| R1_f | forecast centralized | full state across agents; realized current-hour wind/RT price and COP-wind/DA-price forecasts thereafter | receding-horizon central LP |
+| R2 | full-information selfish game | all plans and states | Gauss-Seidel best response |
+| R2_f | forecast full-information game | current truth and future forecasts, with other plans visible | hourly receding-horizon best-response game |
+| R3a | penalty coordination | full information | best-response game with full exposure to shared penalties |
+| R3b | penalty and dual-price coordination | full information plus central POI dual | R3a plus an injection price |
+| R4a | limited information, aggregate | own state plus lagged aggregate headroom | receding-horizon MPC |
+| R4b | limited information, local | own state and fixed capacity-share POI budget | receding-horizon MPC |
+| R4a_f | forecast aggregate | R4a with future COP wind and DA price | receding-horizon MPC |
+| R4b_f | forecast local | R4b with future COP wind and DA price | receding-horizon MPC |
+
+The old 4 by 2 information matrix used rows C, G, A, and L with perfect and forecast columns. Its gaps and the old coordination comparisons are historical diagnostics only; the matched F1 through F4 contrasts in `design_matrix_effects.csv` replace them.

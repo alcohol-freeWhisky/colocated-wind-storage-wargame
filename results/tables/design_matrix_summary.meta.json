@@ -1,0 +1,34 @@
+{
+  "git_hash": "ad8d3ba88c808daaf15b6a4a1f6f52a46e7d8086",
+  "created_utc": "2026-10-25T23:25:15.021713+00:00",
+  "config_sha256": "9022409f4ac898da61eee59cb405e5939f4498584621cc111e918913973c3de5",
+  "runtime_s": 1033.8559531252831,
+  "rows": 14,
+  "workers": 4,
+  "requested_days": null,
+  "requested_day_list": null,
+  "agents": [
+    "ANCHOR_WIND1",
+    "ANCHOR_WIND2",
+    "ANCHOR_WIND3",
+    "ANCHOR_WIND4",
+    "ANCHOR_WIND5"
+  ],
+  "cells": [
+    "C_P",
+    "C_F",
+    "D_P_INJ_FULL",
+    "D_P_INJ_PRICE",
+    "D_P_INJ_NONE",
+    "D_P_EQ_FULL",
+    "D_P_EQ_PRICE",
+    "D_P_EQ_NONE",
+    "D_F_INJ_FULL",
+    "D_F_INJ_PRICE",
+    "D_F_INJ_NONE",
+    "D_F_EQ_FULL",
+    "D_F_EQ_PRICE",
+    "D_F_EQ_NONE"
+  ],
+  "failed_days": {}
+}

@@ -2,7 +2,7 @@
 
 This file is the complete record of every parameter in `config/base.yaml`, how it was obtained, and whether it is
 **observed** (taken directly from public data), **calibrated** (set from public data or literature with a documented rule),
-or **designed** (a wargame variable chosen by us, with its sensitivity range). Numbers are as of the dataset built on
+or **designed** (a wargame variable chosen by us, with its experimental levels). Numbers are as of the dataset built on
 2026-10-21 from ERCOT operating days 2025-03-01 to 2025-04-30. Section numbers refer to `docs/proposal.tex`.
 
 ## 1. Data pipeline (observed inputs)
@@ -32,10 +32,10 @@ Resources: one operating day is one episode (24 hourly steps). Every pool resour
 
 | Parameter | Value | Status | Basis |
 |---|---|---|---|
-| Power ratio `p_ratio = P_i / N_i` | 0.29 | Calibrated | Anchor: 71.5 MW BESS / 245 MW wind HSL on 2025-04-15 (1.8). Context: Vortex 0.37; LBNL 2025 operating US wind+storage fleet weighted-average storage:generator ratio 18 % (20 plants, 3,177 MW wind, 569 MW storage) [R6]; EIA-860 2023 TX co-located wind+storage median 0.08 (1.7). Sensitivity: {0.10, 0.29, 0.50}. |
-| Duration `E_i / P_i` | 1.5 h | Calibrated | Anchor 113 MWh / 71.5 MW = 1.58 h; Vortex 1.51 h; LBNL 2025 wind+storage fleet average 1.2 h ("typically ~1 hr") [R6]; EIA-860 2023 TX battery median 1.0 h (1.7). Sensitivity: {1.0, 1.5, 4.0} h. |
+| Power ratio `p_ratio = P_i / N_i` | 0.29 | Calibrated | Anchor: 71.5 MW BESS / 245 MW wind HSL on 2025-04-15 (1.8). Context: Vortex 0.37; LBNL 2025 operating US wind+storage fleet weighted-average storage:generator ratio 18 % (20 plants, 3,177 MW wind, 569 MW storage) [R6]; EIA-860 2023 TX co-located wind+storage median 0.08 (1.7). |
+| Duration `E_i / P_i` | 1.5 h | Calibrated | Anchor 113 MWh / 71.5 MW = 1.58 h; Vortex 1.51 h; LBNL 2025 wind+storage fleet average 1.2 h ("typically ~1 hr") [R6]; EIA-860 2023 TX battery median 1.0 h (1.7). |
 | Round-trip efficiency | 85 % (η_c = η_d = 0.922) | Calibrated (literature) | NREL ATB utility-scale battery storage adopts 85 % as the representative round-trip efficiency, following Cole and Frazier (2019) / Cole et al. (2025) [R7]. |
-| Degradation cost `C_deg` | 10 $/MWh discharged | Calibrated (literature) | Marginal degradation cost of lithium-ion storage in dispatch studies ranges from ≈7–13 $/MWh-throughput (optimal marginal cost over the first 15 years) to ≈17 $/MWh levelised at 200 $/kWh pack cost [R8]; a full-cycle amortisation at 2,000 cycles gives ≈100 $/MWh as an upper bound [R9]. 10 $/MWh is in the lower-middle of this range, consistent with energy-arbitrage operation. Sensitivity: {5, 10, 20} (planned; not in the Workshop 1 grid). |
+| Degradation cost `C_deg` | 10 $/MWh discharged | Calibrated (literature) | Marginal degradation cost of lithium-ion storage in dispatch studies ranges from ≈7–13 $/MWh-throughput (optimal marginal cost over the first 15 years) to ≈17 $/MWh levelised at 200 $/kWh pack cost [R8]; a full-cycle amortisation at 2,000 cycles gives ≈100 $/MWh as an upper bound [R9]. The model charges this cost on discharge `d` only. |
 | Initial / terminal SoC | 50 % of `E_i`; terminal SoC ≥ initial | Designed | Standard daily-cycle convention; prevents end-of-horizon dumping. Alternative `free` is implemented. |
 | Grid charging | Allowed (`q_it` may be negative) | Designed | ERCOT ESRs may charge from the grid; relevant because 20 % of RT hours in the window have negative prices at HB_WEST. |
 | Tie-break cost | 1e-3 $/MWh on c + d + r | Numerical | Removes LP degeneracy (simultaneous charge and discharge); changes profits by < 0.01 %. |
@@ -44,35 +44,38 @@ Resources: one operating day is one episode (24 hourly steps). Every pool resour
 
 | Parameter | Value | Status | Basis |
 |---|---|---|---|
-| POI limit `K = kappa_K · Σ N_i` | kappa_K = 0.6 (base, designed stress level); 0.9 = empirically anchored value | Designed, anchored | LBNL 2025 [R6]: in CAISO's queue (the only queue that reports POI limits), the median combined wind+storage capacity is 142 % of the POI limit and the wind capacity alone equals or exceeds the POI limit in 73 % of wind+storage plants; with a 0.29 storage ratio this implies K ≈ 0.9 × wind nameplate, which CAISO enforces as an "aggregate capability constraint" on co-located resources [R10]. At kappa_K = 0.9 the Anchor POI binds in only 18 % of hours of the window and most decentralised regimes coincide with the central solution, so the *base case* uses kappa_K = 0.6 (POI binds in 49 % of hours) as the designed stress level; the sensitivity grid kappa_K ∈ {0.5, …, 1.0} contains the anchored value. Share of hours with available wind above K: 0.5 → 56 %, 0.6 → 49 %, 0.7 → 42 %, 0.8 → 35 %, 0.9 → 18 %, 1.0 → 0 %. |
-| Minimum delivery `D_t = delta_D · Σ_i b_it` | delta_D = 0.5 | Designed | Represents a market or contractual delivery commitment (§3). There is no ERCOT rule that imposes a minimum delivery on wind; ERCOT exempts intermittent renewable resources from the Base Point Deviation Charge in Protocols §6.6.5 [R11]. Kept as a stylised commitment; sensitivity in later workshops. |
+| POI limit `K = kappa_K · Σ N_i` | kappa_K = 0.6 (base, designed stress level); 0.9 = empirically anchored value | Designed, anchored | LBNL 2025 [R6]: in CAISO's queue, the median combined wind+storage capacity is 142 % of the POI limit and wind capacity alone equals or exceeds the POI limit in 73 % of wind+storage plants. With a 0.29 storage ratio this implies K ≈ 0.9 × wind nameplate [R10]. At 0.9 the Anchor POI binds in only 18 % of hours, so the base design uses 0.6, where it binds in 49 % of hours. |
+| Minimum delivery `D_t = delta_D · Σ_i b_it` | delta_D = 0.5 | Designed | Represents a market or contractual delivery commitment (§3). There is no ERCOT rule that imposes a minimum delivery on wind; ERCOT exempts intermittent renewable resources from the Base Point Deviation Charge in Protocols §6.6.5 [R11]. Kept as a stylized commitment and held fixed in the design matrix. |
 | Under-delivery penalty `lambda_minus` | 250 $/MWh | Designed, anchored | The economic exposure of an ERCOT resource that under-delivers against its day-ahead position is the RT price (two-settlement). 250 $/MWh lies between the 99th percentile (150 $/MWh) and the maximum (1,541 $/MWh) of HB_WEST RT prices in the window, and far below the ERCOT system-wide offer cap of 5,000 $/MWh and the Brattle survey VOLL of 35,685 $/MWh [R12]. |
 | Overflow penalty `lambda_plus` | 100 $/MWh | Designed | Applies only in the strategic layer (what agents *attempt*); physically the plant controller curtails pro rata above K (`solvers/realize.py`), so realised exports never exceed K. The value represents the controller's/QSE's internal enforcement price. |
-| Penalty sharing `beta_i` | capacity share (R2), full (R3) | Designed | §3 of the proposal; R3 tests "expose agents to the whole shared cost". |
+| Penalty allocation | `INJ` or `EQ` | Designed | INJ uses causal positive-injection overflow shares and own-deficit shortfall charges. EQ uses equal shares of system overflow and shortfall penalties. This is factor F3. |
 | Settlement price | `pi_RT` | Designed | Agents are price takers at RT; the DA price is used only as the agents' price forecast. |
 
-## 5. Information regimes (§4): experiment matrix
+## 5. Part I design matrix (§4)
 
-Two separate information effects are varied factorially (decided 2026-10-21 after a diagnostic showed they were confounded):
+| Factor | Levels | Status | Implementation |
+|---|---|---|---|
+| F1 control | `C`, `D` | Designed | Central planner or independent decision makers. |
+| F2 foresight | `P`, `F` | Designed | True remaining-horizon wind/RT price or current truth followed by COP wind/DA price. |
+| F3 penalty allocation | `INJ`, `EQ` | Designed | Causal injection/own-deficit charges or equal system-penalty shares. |
+| F4 market information | `FULL`, `PRICE`, `NONE` | Designed | Other agents' plans, a coordinator congestion price, or neither. |
 
-| Own foresight → / Information about others ↓ | perfect (own future RT price and own wind known) | forecast (DA price, COP HSL; realised values only for the current hour) |
-|---|---|---|
-| C: central oracle | R1 (one-shot LP) | R1_f (receding-horizon LP) |
-| G: full-information game | R2 (best-response Nash) | R2_f (receding-horizon game) |
-| A: aggregate headroom signal `K − Q_{t−1}` | R4a (MPC) | R4a_f |
-| L: local only (fixed capacity-share POI budget) | R4b (MPC) | R4b_f |
+The canonical 14 cells are `C_P`, `C_F`, and `D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}`. All are hourly receding-horizon policies with the same realization layer and terminal SoC rule. Effects are matched daily contrasts on realized J. See `docs/DESIGN.md` section 4 for the complete contract.
 
-Plus R3a (full exposure to shared penalties) and R3b (R3a + POI dual price from R1). In the limited-information regimes an agent cannot observe the aggregate shortfall, so it penalises a *private* shortfall against its own commitment D_i = delta_D · b_i, weighted by the same beta_i (capacity share) as in the game, which keeps marginal shortage incentives comparable across regimes (`mpc.private_shortfall_beta: game`). Best-response convergence is tested on the undamped residual (tol 1e-5 of ΣN) and on a unilateral-deviation gain below 1 $, which keeps the strategic gap from being a tolerance artefact. Gaps: strategic = R1 − R2; information (aggregate/local) = R2 − R4a / R2 − R4b; signal value = R4a − R4b; forecast = X − X_f for each row.
+## 6. Design-matrix solver parameters
 
-## 6. Correlation and tightness sensitivity (§4, §5)
-
-Agent sets are chosen from real series: from the 37-resource pool, 4-agent sets whose mean pairwise Pearson correlation of hourly available power (61-day window) is closest to the targets low 0.55 / medium 0.75 / high 0.95, restricted to full-coverage resources. No synthetic decorrelation is used. The selected sets (authoritative list: `results/tables/agent_sets.csv`, regenerated by `code/scripts/04_sensitivity.py`) are:
-
-  - **low** (target ρ = 0.55, mean ρ = 0.550, range 0.22–0.95, 550 MW): HHGT_HHOLLOW1, HHGT_HHOLLOW3, ANCHOR_WIND2, LACY_CRK_UNIT2
-  - **medium** (target ρ = 0.75, mean ρ = 0.750, range 0.64–0.90, 460 MW): HHGT_HHOLLOW3, HHGT_CALLAHAN, ANCHOR_WIND5, VERAWIND_UNIT5
-  - **high** (target ρ = 0.95, mean ρ = 0.950, range 0.93–0.98, 233 MW): VERAWIND_UNIT1, VERAWIND_UNIT3, VERAWIND_UNIT4, VERAWIND_UNIT5
-
-The high set is a single-plant set (Vera Wind units); the low set mixes units from three plants (Horse Hollow, Anchor, Lacy Creek). The grid is kappa_K ∈ {0.5, …, 1.0} × 3 sets × 5 storage designs on every 3rd operating day (20 days) for regimes R1, R2, R3a, R3b, R4a, R4b.
+| Parameter | Value | Status | Basis |
+|---|---:|---|---|
+| FULL maximum best-response sweeps | 200 | Designed | Upper limit for each hourly game. |
+| FULL residual tolerance | `1e-5 × ΣN` | Designed | Undamped best-response residual. |
+| FULL maximum unilateral gain | $1 | Designed | Required together with the residual test for convergence. |
+| PRICE proximal coefficient `tau` | 2.0 | Designed | Grid-selected numerical regularizer; excluded from reported economic costs. |
+| PRICE coordination step `rho` | 0.2 $/MWh per MW, constant | Designed | Grid-selected predictor-corrector dual step. |
+| PRICE maximum iterations | 60 | Designed | Upper limit for each hourly coordinator solve. |
+| PRICE overflow tolerance | `1e-3 × ΣN` MW | Designed | Maximum positive aggregate overflow stopping test. |
+| PRICE complementary-slackness tolerance | $1/hour | Designed | Maximum `mu × (K-Q)+` stopping test. |
+| PRICE price-change tolerance | $0.01/MWh | Designed | Used with the aggregate-injection-change alternative stopping test. |
+| Warm starts | enabled | Designed | Prior-hour plan and price tails initialize the next receding-horizon solve. |
 
 ## 7. Monitor calibration (§4, Part III)
 

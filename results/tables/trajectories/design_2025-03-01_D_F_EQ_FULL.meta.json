@@ -1,0 +1,9 @@
+{
+  "git_hash": "ad8d3ba88c808daaf15b6a4a1f6f52a46e7d8086",
+  "created_utc": "2026-10-25T21:45:19.273006+00:00",
+  "config_sha256": "94b24cec3b3e4f7de9c8aeee679e016f7d8965cb46c78b29792936cd3940df45",
+  "runtime_s": 119.1739327502437,
+  "rows": 120,
+  "day": "2025-03-01",
+  "cell": "D_F_EQ_FULL"
+}
