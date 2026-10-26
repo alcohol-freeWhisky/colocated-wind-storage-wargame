@@ -2,39 +2,142 @@
 
 Part I measures how much system value is lost when co-located wind-storage units that share one point of interconnection (POI) are operated by independent decision makers, and which of four design factors accounts for the loss: control, foresight, penalty allocation, or market information. The experiment runs 14 cells over 60 complete ERCOT operating days and evaluates every contrast on the realized system objective J.
 
-## Design factors
+## Problem formulation
 
-| Factor | Levels | What it represents in practice | Model implementation | How its effect is measured on realized J |
-|---|---|---|---|---|
-| F1 control | `C`, `D` | One plant controller versus independent unit controllers | A central receding-horizon LP versus decentralized policies | `C_x - D_x_*`, holding F2 fixed; every matching decentralized F3/F4 cell is reported |
-| F2 foresight | `P`, `F` | Knowing future realized wind and RT prices versus using operational forecasts | `P` uses true wind and RT price over the remaining horizon; `F` uses current truth followed by COP wind and DA price | `X_P - X_F` for every matching cell |
-| F3 penalty allocation | `INJ`, `EQ` | Responsibility based on causal contribution versus equal responsibility | `INJ` uses positive-injection overflow shares and own-deficit shortfall charges; `EQ` uses equal shares of system penalties | `INJ - EQ`, holding F2 and F4 fixed |
-| F4 market information | `FULL`, `PRICE`, `NONE` | Other agents' plans, a coordinator congestion price, or neither | Best-response game, coordinator price iteration, or a fixed capacity-share POI budget | `FULL - PRICE`, `PRICE - NONE`, and `FULL - NONE`, holding F2 and F3 fixed |
+### Sets and data
 
-The 2 by 7 design has the following canonical cell ids, defined in `code/wargame/experiments/design.py`:
+Units $i \in \mathcal{N} = \{1,\dots,N\}$ ($N = 5$) share one POI. Hours $t \in \mathcal{T} = \{1,\dots,T\}$, $T = 24$; one operating day is one episode. The following data are exogenous:
 
-| F2 | Central | INJ/FULL | INJ/PRICE | INJ/NONE | EQ/FULL | EQ/PRICE | EQ/NONE |
+| Symbol | Meaning | Source |
+|---|---|---|
+| $W_{it} \ge 0$ | available wind of unit $i$ in hour $t$ (MWh) | ERCOT SCED HSL |
+| $\hat W_{it}$ | day-ahead forecast of $W_{it}$ | ERCOT COP HSL |
+| $\pi_t$ | real-time price (\$/MWh), taken as given | ERCOT HB_WEST RTM SPP |
+| $\hat\pi_t$ | day-ahead price (\$/MWh) | ERCOT HB_WEST DAM SPP |
+| $N_i$ | nameplate of unit $i$ (MW) | ERCOT SCED |
+| $K = \kappa_K \sum_i N_i$ | POI export limit (MW), $\kappa_K = 0.6$ | designed |
+| $D_t = \delta_D \sum_i \hat W_{it}$ | system delivery obligation (MWh), $\delta_D = 0.5$ | designed |
+| $D_{it} = \delta_D \hat W_{it}$ | unit $i$'s share of the obligation | designed |
+| $\lambda^-, \lambda^+$ | shortfall and overflow penalty rates, 250 and 100 \$/MWh | designed |
+| $E_i, P_i$ | battery energy (MWh) and power (MW) of unit $i$ | observed Anchor BESS, scaled |
+| $\eta_c = \eta_d = \sqrt{0.85}$ | charging and discharging efficiency | NREL ATB |
+| $c_{\mathrm{deg}} = 10$ | degradation cost per MWh discharged | literature |
+| $s_i^0 = 0.5 E_i$ | initial state of charge | designed |
+
+### Decision variables and physics
+
+Unit $i$ chooses curtailment $r_{it}$, charging $c_{it}$ and discharging $d_{it}$, all non-negative. Net injection and aggregate injection are
+
+$$q_{it} = W_{it} - r_{it} - c_{it} + d_{it}, \qquad Q_t = \sum_{i \in \mathcal{N}} q_{it}.$$
+
+The feasible set $\mathcal{X}_i$ of unit $i$ is defined by
+
+$$s_{i,t+1} = s_{it} + \eta_c c_{it} - d_{it}/\eta_d, \quad 0 \le s_{it} \le E_i, \quad 0 \le c_{it}, d_{it} \le P_i, \quad 0 \le r_{it} \le W_{it}, \quad s_{i,1} = s_i^0, \quad s_{i,T+1} \ge s_i^0 .$$
+
+Charging from the grid is allowed ($q_{it} < 0$ is feasible). System shortfall and overflow in hour $t$ are
+
+$$V_t^- = (D_t - Q_t)^+, \qquad V_t^+ = (Q_t - K)^+ .$$
+
+The energy profit of unit $i$ is $\Pi_i(q_i, d_i) = \sum_t \left[\pi_t q_{it} - c_{\mathrm{deg}}\, d_{it}\right]$.
+
+### Centralized problem (F1 = C)
+
+$$
+\begin{aligned}
+\max_{(r,c,d) \in \prod_i \mathcal{X}_i} \quad & \sum_{i} \Pi_i(q_i, d_i) - \lambda^- \sum_t V_t^- \\
+\text{s.t.} \quad & Q_t \le K \quad \forall t .
+\end{aligned}
+$$
+
+This is a linear program. Its multiplier $\mu_t^\star \ge 0$ on $Q_t \le K$ is the shadow price of POI capacity in hour $t$.
+
+### Decentralized game (F1 = D)
+
+Unit $i$ chooses $x_i = (r_i, c_i, d_i) \in \mathcal{X}_i$ to maximize its own payoff $u_i(x_i, x_{-i})$. The POI limit is not a constraint of unit $i$; it enters only through the overflow charge. The payoff depends on the penalty allocation rule (F3):
+
+**EQ (equal shares).** Each unit pays $1/N$ of each system penalty:
+
+$$u_i^{\mathrm{EQ}} = \Pi_i - \frac{\lambda^-}{N} \sum_t V_t^- - \frac{\lambda^+}{N} \sum_t V_t^+ .$$
+
+**INJ (causal shares).** Each unit pays the shortfall rate on its own deficit and a share of the system overflow proportional to its positive injection:
+
+$$u_i^{\mathrm{INJ}} = \Pi_i - \lambda^- \sum_t (D_{it} - q_{it})^+ - \lambda^+ \sum_t \frac{q_{it}^+}{\sum_j q_{jt}^+}\, V_t^+ ,$$
+
+with the overflow share set to $1/N$ when $\sum_j q_{jt}^+ = 0$. The overflow shares sum to one under both rules, so overflow charges add up to the system overflow penalty. Under INJ the shortfall charges sum to at least the system shortfall penalty and never to a multiple of it. The INJ overflow charge is convex in $q_{it}$, so each unit's problem remains a convex program.
+
+A strategy profile $x^\star = (x_1^\star,\dots,x_N^\star)$ is a pure-strategy Nash equilibrium if
+
+$$u_i(x_i^\star, x_{-i}^\star) \ge u_i(x_i, x_{-i}^\star) \qquad \forall x_i \in \mathcal{X}_i,\ \forall i \in \mathcal{N}.$$
+
+The strategic loss of a profile $x$ is $J^{\mathrm{C}} - J(x)$, where $J$ is the realized system objective defined below, and the price of anarchy is $J^{\mathrm{C}} / J(x^\star)$.
+
+### Information structures (F4)
+
+F4 specifies what enters unit $i$'s problem about the other units.
+
+**FULL.** Unit $i$ observes $x_{-i}$ and best-responds to it: $x_i \in \arg\max_{x_i \in \mathcal{X}_i} u_i(x_i, x_{-i})$. The equilibrium is computed by damped Gauss–Seidel best-response iteration (damping 0.5, at most 200 sweeps). A profile is accepted as an equilibrium when the undamped best-response residual is below $10^{-5} \sum_i N_i$ and the largest unilateral deviation gain is at most \$1.
+
+**PRICE.** Unit $i$ observes only a congestion price vector $\mu \in \mathbb{R}_+^T$ announced by a coordinator who observes only $Q_t$. The price replaces the overflow charge:
+
+$$x_i(\mu) \in \arg\max_{x_i \in \mathcal{X}_i} \ \sum_t \left[(\pi_t - \mu_t)\, q_{it} - c_{\mathrm{deg}}\, d_{it}\right] - w_i^- \lambda^- \sum_t (D_{it} - q_{it})^+ ,$$
+
+with $w_i^- = 1$ under INJ and $w_i^- = 1/N$ under EQ. The coordinator iterates $\mu_t \leftarrow \left[\mu_t + \rho\,(Q_t(\mu) - K)\right]^+$ with $\rho = 0.2$ \$/MWh per MW until $\max_t (Q_t - K)^+ \le 10^{-3} \sum_i N_i$ and $\max_t \mu_t (K - Q_t)^+ \le 1$ \$, or 60 iterations. The unit responses carry a quadratic proximal term $\tfrac{\tau}{2}\|q_i - q_i^{\mathrm{prev}}\|^2$, $\tau = 2.0$, which is a numerical device for the fixed-point computation and is not part of the payoff. If the units' shortfall terms coincided with the central one, this would be the Lagrangian decomposition of a linear program and the fixed point at $\mu = \mu^\star$ would reproduce the centralized dispatch; with the private shortfall charges above, the fixed point approximates it.
+
+**NONE.** Unit $i$ observes nothing about the others and uses a fixed share of the POI:
+
+$$x_i \in \arg\max_{x_i \in \mathcal{X}_i} \ \Pi_i - w_i^- \lambda^- \sum_t (D_{it} - q_{it})^+ \quad \text{s.t.} \quad q_{it} \le K\, \frac{N_i}{\sum_j N_j} \ \ \forall t ,$$
+
+with the same $w_i^-$ as under PRICE.
+
+### Foresight (F2) and receding horizon
+
+Every cell is solved hour by hour. At hour $t$ each decision maker solves its problem over $\{t,\dots,T\}$ with the information set
+
+$$\mathcal{I}^{\mathrm{P}}_t = \{W_{i\tau}, \pi_\tau : \tau \ge t\}, \qquad
+\mathcal{I}^{\mathrm{F}}_t = \{W_{it}, \pi_t\} \cup \{\hat W_{i\tau}, \hat\pi_\tau : \tau > t\},$$
+
+submits the hour-$t$ action, and the loop advances. Under F2 = F, the plans the units see (FULL), the prices the coordinator computes (PRICE) and the obligation $D_{it}$ are all built from forecasts; realization uses the true $W_{it}$ and $\pi_t$.
+
+### Realization and the system objective
+
+The submitted hour-$t$ actions pass through a map $\Phi$ that enforces the physics. Actions are clipped to the battery bounds; if $Q_t > K$, the excess is removed from the positive injectors in proportion to $q_{it}^+$, first by curtailing wind and then by reducing discharge (the energy stays in the battery). The realized quantities $\tilde q_{it}, \tilde d_{it}, \tilde Q_t$ satisfy $\tilde Q_t \le K$ in every hour. The realized system objective is
+
+$$J = \sum_t \left[\pi_t \tilde Q_t - c_{\mathrm{deg}} \sum_i \tilde d_{it} - \lambda^- (D_t - \tilde Q_t)^+\right].$$
+
+$\lambda^+$ does not appear in $J$ because overflow cannot occur after realization; it acts on the units' plans only. All comparisons below are on $J$.
+
+### Factors, cells and contrasts
+
+| Factor | Levels | Enters the model through |
+|---|---|---|
+| F1 control | C, D | centralized problem versus the game |
+| F2 foresight | P, F | information set $\mathcal{I}^{\mathrm{P}}_t$ or $\mathcal{I}^{\mathrm{F}}_t$ |
+| F3 penalty allocation | INJ, EQ | payoff $u_i^{\mathrm{INJ}}$ or $u_i^{\mathrm{EQ}}$ and the weight $w_i^-$ |
+| F4 market information | FULL, PRICE, NONE | what unit $i$ observes: $x_{-i}$, $\mu$, or nothing |
+
+F1 = C is crossed only with F2, which gives $2 + 2 \times 2 \times 3 = 14$ cells. Cell identifiers follow the pattern `C_<F2>` and `D_<F2>_<F3>_<F4>`:
+
+| F2 | C | INJ, FULL | INJ, PRICE | INJ, NONE | EQ, FULL | EQ, PRICE | EQ, NONE |
 |---|---|---|---|---|---|---|---|
-| `P` | `C_P` | `D_P_INJ_FULL` | `D_P_INJ_PRICE` | `D_P_INJ_NONE` | `D_P_EQ_FULL` | `D_P_EQ_PRICE` | `D_P_EQ_NONE` |
-| `F` | `C_F` | `D_F_INJ_FULL` | `D_F_INJ_PRICE` | `D_F_INJ_NONE` | `D_F_EQ_FULL` | `D_F_EQ_PRICE` | `D_F_EQ_NONE` |
+| P | `C_P` | `D_P_INJ_FULL` | `D_P_INJ_PRICE` | `D_P_INJ_NONE` | `D_P_EQ_FULL` | `D_P_EQ_PRICE` | `D_P_EQ_NONE` |
+| F | `C_F` | `D_F_INJ_FULL` | `D_F_INJ_PRICE` | `D_F_INJ_NONE` | `D_F_EQ_FULL` | `D_F_EQ_PRICE` | `D_F_EQ_NONE` |
 
-## Model
+Let $J^{\mathrm{cell}}_\omega$ be the realized objective of a cell on day $\omega$, and $\bar J^{\mathrm{cell}}$ its mean over the 60 days. Each factor is measured by differences between cells that differ in that factor only:
 
-Each of five Anchor Wind units has available wind and a co-located battery. In every hour, its controller chooses curtailment `r`, battery charging `c`, and discharging `d`. Net injection is `q = W - r - c + d`; state of charge follows charging and discharging efficiency, stays within the battery energy bound, and returns to at least its initial daily level. The degradation cost is charged on discharge only, `c_deg * d`.
+$$
+\begin{aligned}
+\text{F1:}\quad & \Delta_1 = \bar J^{\mathrm{C}_f} - \bar J^{\mathrm{D}_{f,a,m}} && \text{for each } f \in \{P,F\},\ a \in \{INJ,EQ\},\ m \in \{FULL,PRICE,NONE\}, \\
+\text{F2:}\quad & \Delta_2 = \bar J^{(\cdot)_P} - \bar J^{(\cdot)_F} && \text{for each of the 7 matched pairs}, \\
+\text{F3:}\quad & \Delta_3 = \bar J^{\mathrm{D}_{f,INJ,m}} - \bar J^{\mathrm{D}_{f,EQ,m}} && \text{for each } (f,m), \\
+\text{F4:}\quad & \Delta_4 = \bar J^{\mathrm{D}_{f,a,m}} - \bar J^{\mathrm{D}_{f,a,m'}} && \text{for } (m,m') \in \{(FULL,PRICE),(PRICE,NONE),(FULL,NONE)\} \text{ and each } (f,a).
+\end{aligned}
+$$
 
-The units share an export limit `K` at the POI and a system delivery obligation `D`. Planned shortfall is `(D - Q)+`, and planned overflow is `(Q - K)+`, where `Q` is aggregate injection. F3 sets how the resulting charges are divided among agents. F4 sets what an agent knows about the others: their plans, a coordinator's congestion price, or nothing beyond its own fixed share of POI capacity.
-
-Every cell is solved hour by hour. At each hour the decision makers optimize over the remaining hours of the day, submit the current hour's action, and the joint action goes through a realization step. If the submitted aggregate exceeds K, injections are cut pro rata, first by curtailing wind and then by reducing discharge, so realized export never exceeds K.
-
-The reported system objective is
-
-`J = realized energy profit - c_deg * realized discharge - lambda_minus * realized under-delivery`.
-
-The overflow penalty enters the agents' planning problems but not J, since the realization step prevents physical overflow. The full implementation contract is in [docs/DESIGN.md](docs/DESIGN.md). A two-player version of the model with a worked two-hour example is in [docs/two_player_formulation.md](docs/two_player_formulation.md).
+Each contrast is reported as a mean and median in \$/day and as the mean of the daily ratio $\Delta_\omega / J^{\mathrm{C_P}}_\omega$. The full implementation contract is in [docs/DESIGN.md](docs/DESIGN.md). The two-player case with a worked two-hour example is in [docs/two_player_formulation.md](docs/two_player_formulation.md).
 
 ## Experiments
 
-Each factor is measured as a difference in mean daily J between two cells that differ in that factor alone. Percentages are means of the daily ratio to C_P. All numbers below come from [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv); the figures are [`fig_design_matrix.png`](results/figures/fig_design_matrix.png) and [`fig_design_effects.png`](results/figures/fig_design_effects.png).
+Percentages are means of the daily ratio to $J^{\mathrm{C_P}}$. All numbers below come from [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv); the figures are [`fig_design_matrix.png`](results/figures/fig_design_matrix.png) and [`fig_design_effects.png`](results/figures/fig_design_effects.png).
 
 ### F1 control
 
