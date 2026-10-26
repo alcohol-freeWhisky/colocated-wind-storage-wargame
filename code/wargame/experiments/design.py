@@ -1,4 +1,4 @@
-"""Canonical cells and parser for the revised Part I design matrix."""
+"""Canonical cells and parser for the design matrix."""
 
 from __future__ import annotations
 

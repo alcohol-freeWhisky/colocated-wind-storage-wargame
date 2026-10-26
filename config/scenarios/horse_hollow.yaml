@@ -1,6 +1,3 @@
-# Alternative primary site: Horse Hollow (5 wind units, no observed storage -> battery is a designed assumption)
+# Alternative base site: Horse Hollow (5 wind units, no observed storage -> battery is a designed assumption)
 data:
-  primary_site: Horse Hollow
   primary_agents: [HHGT_HHOLLOW1, HHGT_HHOLLOW2, HHGT_HHOLLOW3, HHGT_HHOLLOW4, HHGT_CALLAHAN]
-battery:
-  source: designed_assumption

@@ -420,13 +420,16 @@ def main() -> None:
     }
     _write_outputs(by_day, cfg, runtime, metadata)
 
-    illustrative_path = tables / "illustrative_days.csv"
-    selected_days: set[str] = set()
-    if illustrative_path.exists():
-        selected_days = set(pd.read_csv(illustrative_path)["day"].astype(str))
-        selected_days.intersection_update(item["day"] for item in completed)
-    if not selected_days:
-        selected_days = {completed[0]["day"]}
+    # Trajectories are exported for the day with the largest C_P minus D_P_EQ_FULL gap
+    # (the day plotted in the report); fall back to the first completed day.
+    objective = by_day.pivot_table(
+        index="day", columns="cell", values="system_objective", aggfunc="first", observed=True
+    )
+    selected_days = {completed[0]["day"]}
+    if {"C_P", "D_P_EQ_FULL"}.issubset(objective.columns):
+        gap = (objective["C_P"] - objective["D_P_EQ_FULL"]).dropna()
+        if not gap.empty:
+            selected_days = {str(gap.idxmax())}
     trajectory_dir = tables / "trajectories"
     for item in completed:
         if item["day"] not in selected_days:

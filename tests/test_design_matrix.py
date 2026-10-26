@@ -1,4 +1,4 @@
-"""Offline tests for the revised four-factor design matrix."""
+"""Offline tests for the four-factor design matrix."""
 
 from __future__ import annotations
 
@@ -202,7 +202,7 @@ def test_injection_full_exact_game_converges_with_small_deviation_gain() -> None
     assert solution.max_gain <= 1.0
 
 
-def test_c_p_matches_one_shot_r1_realized_objective() -> None:
+def test_c_p_matches_one_shot_central_realized_objective() -> None:
     cfg = _config()
     episode = Episode.from_arrays(
         [[2.0, 5.0, 1.0, 4.0], [3.0, 1.0, 4.0, 2.0]],

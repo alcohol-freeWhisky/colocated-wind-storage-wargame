@@ -177,7 +177,6 @@ def _minimal_config() -> dict[str, Any]:
             "delta_D": 0.5,
             "lambda_minus": 250.0,
             "lambda_plus": 100.0,
-            "beta_rule": "capacity_share",
         },
         "game": {
             "max_sweeps": 200,
@@ -186,7 +185,6 @@ def _minimal_config() -> dict[str, Any]:
             "deviation_check": True,
             "injection_shortfall": "own",
         },
-        "mpc": {"price_info": "perfect", "wind_info": "perfect"},
         "solver": "HIGHS",
     }
 

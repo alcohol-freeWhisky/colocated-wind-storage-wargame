@@ -35,20 +35,16 @@ Project: *Strategic Coordination, Learning, and Monitoring in Co-Located Wind-St
 
 Percentages of C_P above are means of daily percentages.
 
-## Superseded results (kept for reference)
-
-- The R1 through R4b_f regime comparison is retained in `regimes_*.csv`, but it was superseded because control, foresight, penalty rules, and information were not separated cleanly.
-- The old information matrix is retained in `matrix_summary*.csv`, but it was superseded because it did not cross the revised F3 and F4 levels.
-- The kappa_K, wind-correlation, and storage-design grid is retained in `sensitivity*.csv`, but it was superseded as a headline result by matched contrasts in the full design matrix.
-
 ## Decisions and deviations log
 
 Sources: `docs/DEVIATIONS.md`, `docs/ASSUMPTIONS.md`, and `config/base.yaml`.
 
 - 2026-10-21, base site: Anchor Wind is the base case because it has five wind resources and observed co-located storage at the same site. Vortex and Horse Hollow remain scenario overrides.
 - 2026-10-21, objective: realized J is energy profit less discharge-only degradation cost and the system under-delivery charge. Attempted-overflow penalties remain planning incentives because the realization layer enforces K.
-- 2026-10-21, base POI: kappa_K is 0.6 as a designed stress level; 0.9 remains the empirically anchored comparison value in legacy work.
-- 2026-10-25, revised Part I design: the headline experiment became a 14-cell factorial over F1 control, F2 foresight, F3 penalty allocation, and F4 market information/coordination. The earlier ad hoc regime list is now legacy.
+- 2026-10-21, base POI: kappa_K is 0.6 as the designed POI tightness; the LBNL-anchored 0.9 is context only (see `docs/ASSUMPTIONS.md`).
+- 2026-10-21, forecast-error schema: `forecast_error_system.parquet` compares forecasts with latest-publication realised HSL, normalized by each region's maximum observed HSL.
+- 2026-10-21, convergence criteria: game convergence is tested on the undamped best-response residual (`game.tol_rel`) together with a $1 unilateral-deviation tolerance (`game.max_gain_tol`).
+- 2026-10-25, design matrix: the headline experiment is a 14-cell factorial over F1 control, F2 foresight, F3 penalty allocation, and F4 market information/coordination.
 - 2026-10-25, PRICE mechanism: the congestion price replaces the overflow penalty. Proximal responses use a predictor-corrector update with tau = 2.0, rho = 0.2, at most 60 iterations, relative overflow tolerance 1e-3, and complementary-slackness tolerance $1/hour.
 - 2026-10-25, exact INJ charges: FULL/INJ best responses use the exact convex causal positive-injection overflow charge. INJ shortfall charges use each agent's own deficit, while EQ uses equal shares of system penalties.
 
@@ -72,7 +68,7 @@ Sources: `docs/DEVIATIONS.md`, `docs/ASSUMPTIONS.md`, and `config/base.yaml`.
 
 1. Generalize the environment to a partially observable Markov game with local and aggregate observations (`K - Q[t-1]`). Owner: TBD.
 2. Implement CTDE and DTDE training on the same episodes, prices, wind data, objective J, and realization layer as Part I. Owner: TBD.
-3. Evaluate against the centralized and revised decentralized design cells on held-out days; report recovery relative to matched Part I gaps. Owner: TBD.
+3. Evaluate against the centralized and decentralized design cells on held-out days; report recovery relative to matched Part I gaps. Owner: TBD.
 4. Diagnose learned behavior, including anti-coordination, synchronized charging, and cycling. Owner: TBD.
 5. Fix seeds, training budgets, and checkpoints in config; log runs with `.meta.json`. Owner: TBD.
 

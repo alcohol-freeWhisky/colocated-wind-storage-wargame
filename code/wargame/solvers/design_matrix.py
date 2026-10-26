@@ -22,7 +22,6 @@ from wargame.experiments.design import parse_cell
 from wargame.model.env import Episode
 from wargame.solvers.agent_lp import AgentLP, AgentSolution, POIBudget
 from wargame.solvers.game import penalty_share_weights, solve_game
-from wargame.solvers.mpc import _budget_vector
 from wargame.solvers.receding import (
     _empty_trajectories,
     _realization,
@@ -54,6 +53,15 @@ class _PriceResult:
     max_overflow: float
     max_mu: float
     converged: bool
+
+
+def _budget_vector(budget: float, battery: Any, soc: float, remaining: int) -> np.ndarray:
+    """Feasible per-hour POI budget: floor hour 0 at max charging, later hours at 0."""
+
+    max_charge = min(battery.P, max(battery.E - soc, 0.0) / battery.eta_c)
+    vector = np.full(remaining, max(budget, 0.0))
+    vector[0] = max(budget, -max_charge)
+    return vector
 
 
 def _view(episode: Episode, t: int, foresight: str) -> Episode:

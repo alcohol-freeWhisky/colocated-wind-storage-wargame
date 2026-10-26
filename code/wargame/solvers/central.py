@@ -1,4 +1,4 @@
-"""Centralized perfect-foresight dispatch (regime R1)."""
+"""Centralized dispatch LP (design-matrix C cells)."""
 
 from __future__ import annotations
 
@@ -201,7 +201,7 @@ def solve_central(
     cfg: Mapping[str, Any] | None = None,
     **solve_kwargs: Any,
 ) -> Solution:
-    """Build and solve regime R1."""
+    """Build and solve the one-shot central LP."""
 
     return CentralLP(episode, cfg).solve(**solve_kwargs)
 

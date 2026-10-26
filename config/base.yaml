@@ -1,5 +1,4 @@
-# Base configuration — Workshop 1. `source:` tags distinguish empirical inputs from designed wargame variables.
-project: "6.974 wargame — co-located wind–storage coordination"
+# Base configuration — Workshop 1. Sections marked EMPIRICAL, CALIBRATED or DESIGNED state the provenance of their values.
 paths:
   raw: data/raw
   interim: data/interim
@@ -12,12 +11,10 @@ data:                                   # EMPIRICAL (public data)
   window_start: "2025-03-01"
   window_end: "2025-04-30"
   tz: US/Central
-  primary_site: Anchor Wind                       # real wind + co-located BESS plant (Enel), 5 wind units + ANCHOR_BESS1/2 share one POI
+  # Base site: Anchor Wind (real wind + co-located BESS plant, 5 wind units + ANCHOR_BESS1/2 share one POI)
   primary_agents: [ANCHOR_WIND1, ANCHOR_WIND2, ANCHOR_WIND3, ANCHOR_WIND4, ANCHOR_WIND5]
-  colocated_storage_observed:                     # EMPIRICAL (ERCOT COP snapshot 2025-04-15: HSL = power, Maximum SOC = energy)
-    ANCHOR: {bess: [ANCHOR_BESS1, ANCHOR_BESS2], power_mw: 71.5, energy_mwh: 113.0, wind_mw: 245.1}
-    VORTEX: {bess: [VORTEX_BESS1], power_mw: 121.8, energy_mwh: 184.0, wind_mw: 331.3}
-    HHGT:   {bess: [], power_mw: 0.0, energy_mwh: 0.0, wind_mw: 805.7}
+  # Observed co-located storage (ERCOT COP snapshot 2025-04-15: HSL = power, Maximum SOC = energy):
+  #   ANCHOR 71.5 MW / 113.0 MWh vs 245.1 MW wind; VORTEX 121.8 MW / 184.0 MWh vs 331.3 MW wind; HHGT none.
   pool:
     - [HHGT_HHOLLOW1, HHGT_HHOLLOW2, HHGT_HHOLLOW3, HHGT_HHOLLOW4, HHGT_CALLAHAN]
     - [CAPRIDGE_CR1, CAPRIDGE_CR2, CAPRIDGE_CR3]
@@ -29,7 +26,6 @@ data:                                   # EMPIRICAL (public data)
     - [CANYONWD_UNIT1, CANYONWD_UNIT2, CANYONWD_UNIT3, CANYONWD_UNIT4, CANYONWD_UNIT5, CANYONWD_UNIT6]
   nameplate_quantile: 0.995
   eia860_url: https://www.eia.gov/electricity/data/eia860/archive/xls/eia8602023.zip
-  baseline_rule: dam_award_else_cop      # b = DAM award if > 0 else COP HSL
 
 battery:                                # CALIBRATED from the observed Anchor Wind BESS (71.5 MW / 113 MWh vs 245 MW wind); efficiency from NREL ATB 2024
   p_ratio: 0.29                         # P_i = p_ratio * nameplate_i   (Anchor: 71.5/245.1 = 0.29; Vortex: 0.37; EIA-860 2023 TX hybrids p50 = 0.08)
@@ -41,28 +37,17 @@ battery:                                # CALIBRATED from the observed Anchor Wi
   soc_init_frac: 0.5
   terminal_soc: return                  # return | free
   allow_grid_charging: true
-  source: calibrated_from_observed_colocated_bess
 
 poi:                                    # DESIGNED wargame variables
-  kappa_K: 0.6                          # designed stress level at which the POI binds in ~49% of hours for the Anchor set; 0.9 is the LBNL-anchored realistic value (median wind+storage = 142% of POI, generator alone >= POI in 73% of plants) and stays in sensitivity.kappa_K_grid
+  kappa_K: 0.6                          # designed stress level at which the POI binds in ~49% of hours for the Anchor set (LBNL median wind+storage = 142% of POI is context only)
   delta_D: 0.5                          # D_t = delta_D * sum_i b_it
   lambda_minus: 250.0                   # $/MWh under-delivery penalty
   lambda_plus: 100.0                    # $/MWh attempted POI overflow penalty (strategic layer)
-  beta_rule: capacity_share             # capacity_share | equal | full
-  source: designed
 
 episode:
   horizon_h: 24
-  settlement_price: pi_RT
-  regime_order: [R1, R1_f, R2, R2_f, R3a, R3b, R4a, R4a_f, R4b, R4b_f]
 
-information:                            # DESIGNED factorial experiment axes
-  coordination_levels: [C, G, A, L]    # central, full-information game, aggregate signal, local
-  own_foresight: [perfect, forecast]
-  forecast_price: pi_DA
-  forecast_wind: cop_hsl
-
-design_matrix:                          # REVISED PART I full factorial
+design_matrix:                          # full factorial
   cells: all                            # "all" or an explicit list of cell ids
   day_stride: 1
   price_coordination:
@@ -83,14 +68,6 @@ game:
   deviation_check: true
   injection_shortfall: own              # own | phi ; INJ agents pay their own private deficit by default
 
-mpc:
-  price_info: perfect                   # perfect | forecast; forecast uses DA future, realised RT now
-  wind_info: perfect                    # perfect | forecast; forecast uses own COP future, realised W now
-  private_shortfall_beta: game          # game | full ; R4 private shortfall penalty weight: beta_i (poi.beta_rule) or 1
-  price_forecast: pi_DA                 # forecast source when price_info = forecast
-  wind_forecast: cop                    # forecast source when wind_info = forecast
-  local_budget_rule: capacity_share     # R4b: q_i <= K * N_i / sum N
-
 monitor:
   thresholds_sigma: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]
   thresholds_frac: [0.02, 0.05, 0.10, 0.15]
@@ -100,19 +77,5 @@ monitor:
   fine_cap_multiple_of_gain: 3.0
   ell_fraction_of_gain: 0.25
   enforceability_a: 2.0
-  source: designed
-
-sensitivity:
-  kappa_K_grid: [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-  regimes: [R1, R2, R3a, R3b, R4a, R4b]   # _f regimes are slow and covered by the base case
-  storage_designs:
-    - {p_ratio: 0.29, duration_h: 1.0}
-    - {p_ratio: 0.29, duration_h: 1.5}   # base (Anchor-like)
-    - {p_ratio: 0.29, duration_h: 4.0}
-    - {p_ratio: 0.10, duration_h: 1.5}   # EIA-860 2023 typical TX hybrid ratio
-    - {p_ratio: 0.50, duration_h: 1.5}
-  day_stride: 3
-  n_agents_for_sets: 4
-  correlation_targets: {low: 0.55, medium: 0.75, high: 0.95}
 
 seed: 6974

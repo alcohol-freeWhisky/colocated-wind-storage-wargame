@@ -63,9 +63,6 @@ config/                         Model and experiment configuration.
 code/wargame/                   Importable data, model, solver, monitor, and experiment packages.
 code/scripts/01_download_raw.py Download and cache the public source data.
 code/scripts/02_build_dataset.py Build the common processed dataset.
-code/scripts/03_run_regimes.py  Legacy, superseded by the design matrix.
-code/scripts/03b_trajectories.py Legacy trajectory export for the old regimes, superseded by the design matrix.
-code/scripts/04_sensitivity.py  Legacy, superseded by the design matrix.
 code/scripts/05_monitor.py      Preliminary Part III monitor calibration.
 code/scripts/06_make_report.py  Generate the matrix-centered Workshop 1 report.
 code/scripts/07_design_matrix.py Run or summarize the 14-cell Part I matrix.
@@ -75,15 +72,13 @@ data/interim/                   Cached per-day extracts.
 data/processed/                 Common dataset and provenance README.
 results/tables/design_matrix_*  Current Part I results and metadata.
 results/figures/fig_design_*    Current Part I figures.
-results/tables/regimes_*        Legacy, superseded by the design matrix.
-results/tables/sensitivity*     Legacy, superseded by the design matrix.
-results/tables/matrix_summary*  Legacy, superseded by the design matrix.
-results/                        Other old-regime figures and trajectories are legacy, superseded by the design matrix.
+results/tables/trajectories/ Hourly dispatch for the plotted design-matrix day.
+results/figures/monitor_*       Preliminary Part III monitor figures.
+results/tables/monitor_*        Preliminary Part III monitor tables.
+results/tables/price_tuning*    PRICE algorithm tuning grid.
 docs/                           Design contract, assumptions, deviations, progress, and report.
 tests/                          Offline synthetic pytest suite.
 ```
-
-The old R1 through R4b_f cells remain available for backward compatibility, including R3a and R4a artifacts, but they are legacy, superseded by the design matrix, and are not headline results.
 
 ## Reproduce
 

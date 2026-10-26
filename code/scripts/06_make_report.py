@@ -523,7 +523,7 @@ Course: MIT 6.974 Wargame, Fall 2026
 
 ## 1. Scope
 
-Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors matters most. The headline experiment is the 14-cell design matrix. The earlier regime list and parameter grid are retained only as superseded artifacts. The preliminary monitor calibration is included as a Part III input.
+Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors matters most. The headline experiment is the 14-cell design matrix. The preliminary monitor calibration is included as a Part III input.
 
 ### Model
 

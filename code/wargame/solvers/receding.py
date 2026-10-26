@@ -1,8 +1,7 @@
-"""Receding-horizon central and full-information forecast regimes."""
+"""Receding-horizon central policy and shared information views."""
 
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -11,10 +10,7 @@ from numpy.typing import NDArray
 
 from wargame.model.env import Episode
 from wargame.solvers.central import solve_central
-from wargame.solvers.game import solve_r2
 from wargame.solvers.realize import Realization, realize_hour
-
-LOGGER = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -192,86 +188,5 @@ def solve_receding_central(
         d_plan=d_plan,
         r_plan=r_plan,
         spill=spill,
-        status="C_P" if foresight == "perfect" else "R1_f",
+        status="C_P" if foresight == "perfect" else "C_F",
     )
-
-
-def solve_receding_game(
-    episode: Episode,
-    cfg: Mapping[str, Any] | None = None,
-) -> Realization:
-    """Execute R2_f with an hourly warm-started forecast best-response game."""
-
-    config = episode.cfg if cfg is None else cfg
-    q, c, d, r, q_plan, c_plan, d_plan, r_plan, spill = _empty_trajectories(episode)
-    soc = np.zeros((episode.N, episode.T + 1), dtype=float)
-    terminal = np.asarray([agent.battery.soc0 for agent in episode.agents], dtype=float)
-    soc[:, 0] = terminal
-    warm: _WarmPlan | None = None
-    sweeps_by_hour: list[int] = []
-    sweep_log: list[dict[str, float]] = []
-    converged = True
-    max_delta = 0.0
-    max_gain = 0.0
-
-    for t in range(episode.T):
-        view = forecast_subhorizon(episode, t)
-        plan = solve_r2(
-            view,
-            config,
-            initial_soc=soc[:, t],
-            terminal_soc=terminal,
-            initial_plan=warm,
-        )
-        q_plan[:, t] = plan.q[:, 0]
-        c_plan[:, t] = plan.c[:, 0]
-        d_plan[:, t] = plan.d[:, 0]
-        r_plan[:, t] = plan.r[:, 0]
-        q[:, t], c[:, t], d[:, t], r[:, t], soc[:, t + 1], spill[:, t] = realize_hour(
-            episode.W[:, t],
-            c_plan[:, t],
-            d_plan[:, t],
-            r_plan[:, t],
-            episode.agents,
-            soc[:, t],
-            episode.K,
-        )
-        sweeps_by_hour.append(plan.sweeps)
-        sweep_log.extend(
-            {"hour": float(t), **entry} for entry in plan.sweep_log
-        )
-        converged = converged and plan.converged
-        max_delta = max(max_delta, plan.max_delta)
-        max_gain = max(max_gain, plan.max_gain)
-        LOGGER.info(
-            "regime=R2_f day=%s hour=%d sweeps=%d converged=%s",
-            episode.day,
-            t,
-            plan.sweeps,
-            plan.converged,
-        )
-        warm = _WarmPlan(plan.c[:, 1:].copy(), plan.d[:, 1:].copy(), plan.r[:, 1:].copy())
-
-    return _realization(
-        episode,
-        q=q,
-        c=c,
-        d=d,
-        r=r,
-        soc=soc,
-        q_plan=q_plan,
-        c_plan=c_plan,
-        d_plan=d_plan,
-        r_plan=r_plan,
-        spill=spill,
-        status="R2_f",
-        converged=converged,
-        sweeps_by_hour=sweeps_by_hour,
-        max_delta=max_delta,
-        max_gain=max_gain,
-        sweep_log=sweep_log,
-    )
-
-
-solve_r1_f = solve_receding_central
-solve_r2_f = solve_receding_game
