@@ -154,8 +154,8 @@ def _reliability_text(cell: str, reliability: dict[str, dict[str, float | str]])
             f"{cell}: game converged {100 * float(item['converged']):.1f}% of hours, "
             f"{float(item['work']):.2f} mean sweeps/hour; max_gain distribution: mean "
             f"${float(item['gain_mean']):.2f}, max ${float(item['gain_max']):.2f}; "
-            f"daily max_gain/C_P distribution: mean {float(item['gain_pct_mean']):.2f}%, "
-            f"max {float(item['gain_pct_max']):.2f}%"
+            f"daily max_gain/C_P distribution: mean {float(item['gain_pct_mean']):.3f}%, "
+            f"max {float(item['gain_pct_max']):.3f}%"
         )
     return (
         f"{cell}: price coordination converged {100 * float(item['converged']):.1f}% of hours, "
