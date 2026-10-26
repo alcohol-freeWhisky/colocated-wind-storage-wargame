@@ -21,16 +21,16 @@ Project: *Strategic Coordination, Learning, and Monitoring in Co-Located Wind-St
 | F3 penalty allocation | Done | Exact causal INJ overflow charge plus own-deficit shortfall charge versus EQ; six matched contrasts |
 | F4 market information and coordination | Done | FULL best-response games, PRICE coordinator fixed points, and NONE fixed-budget policies; 12 pairwise contrasts |
 | Full 2 by 7 matrix | Done | 840 day-cell rows, 14 summary rows, 39 matched contrasts, and two pivot rows in `results/tables/design_matrix_*.csv` |
-| Report | Done | Matrix-centered `docs/workshop1/report.md` and `.html`, with factor tables, solver diagnostics, operating metrics, and an illustrative matrix trajectory |
-| Preliminary monitor calibration | Done as Part III input | Three empirical noise regimes, ROC table, deterrence grid, and monitor figures from `code/scripts/05_monitor.py` |
+| Report | Done | `docs/workshop1/report.md` and `.html`: factor tables, solver diagnostics, operating metrics, one day's trajectories |
+| Preliminary monitor calibration | Done | Three empirical noise regimes, ROC table, deterrence grid, and monitor figures from `code/scripts/05_monitor.py` |
 
 ## Key results
 
-- F1 control: `C_P - mean(D_P_*)` is $1,101/day, with a $473/day median and a mean daily effect of 1.923% of C_P. All 12 matched central-minus-decentralized means are positive. Source: `results/tables/design_matrix_effects.csv`.
-- F2 foresight: `C_P - C_F` is $6,613/day, with a $2,142/day median and a mean daily effect of 11.136% of C_P. All seven matched P-minus-F means are positive, from $6,028 to $6,956/day. Source: `results/tables/design_matrix_effects.csv`.
-- F3 penalty allocation: `D_P_INJ_FULL - D_P_EQ_FULL` is $1,255/day, but its median is $11/day. All six mean contrasts are positive and several medians are near zero, so the effect is heavy-tailed. Source: `results/tables/design_matrix_effects.csv`.
-- F4 information and coordination: under perfect foresight and INJ, PRICE-minus-NONE is $688/day, FULL-minus-NONE is $562/day, and FULL-minus-PRICE is -$126/day. PRICE exceeds NONE and FULL in all four held-fixed mean comparisons. FULL and PRICE differ in mechanism as well as information. Source: `results/tables/design_matrix_effects.csv`.
-- Solver reliability: FULL games converge in 99.39% of evaluated hours with 5.61 mean sweeps/hour; PRICE coordination converges in 96.68% of hours with 21.38 mean iterations/hour. Across FULL day-cells, max_gain averages $0.53 and reaches $12.39. Source: `results/tables/design_matrix_by_day.csv`.
+- F1 control: `C_P - mean(D_P_*)` is $1,101/day (median $473/day, 1.9% of C_P). All 12 matched central-minus-decentralized means are positive. Source: `results/tables/design_matrix_effects.csv`.
+- F2 foresight: `C_P - C_F` is $6,613/day (median $2,142/day, 11.1% of C_P). The seven matched P-minus-F means lie between $6,028 and $6,956/day. Source: `results/tables/design_matrix_effects.csv`.
+- F3 penalty allocation: `D_P_INJ_FULL - D_P_EQ_FULL` is $1,255/day with a median of $11/day; all six matched means are positive and the daily differences are concentrated on a few high-price days. Source: `results/tables/design_matrix_effects.csv`.
+- F4 market information: under perfect foresight and INJ, PRICE minus NONE is $688/day, FULL minus NONE is $562/day, and FULL minus PRICE is -$126/day. PRICE exceeds both NONE and FULL in all four matched comparisons. Source: `results/tables/design_matrix_effects.csv`.
+- Solver reliability: FULL games converge in 99.4% of hours with 5.6 sweeps per hour on average; PRICE coordination converges in 96.7% of hours with 21.4 iterations per hour. Across FULL day-cells the remaining unilateral gain averages $0.53 and never exceeds $12.39. Source: `results/tables/design_matrix_by_day.csv`.
 - Preliminary monitor calibration: at a 5% threshold and 5% withholding, q0/q1 are 0.087/0.442, 0.270/0.431, and 0.364/0.515 for low, medium, and high noise. Source: `results/tables/monitor_deterrence.csv`.
 
 Percentages of C_P above are means of daily percentages.
@@ -55,7 +55,7 @@ Sources: `docs/DEVIATIONS.md`, `docs/ASSUMPTIONS.md`, and `config/base.yaml`.
 - Agents are price takers at RT; the model has no endogenous prices or two-settlement bidding.
 - COP wind and DA price are deterministic forecasts within each receding-horizon solve.
 - The obligation, POI stress level, and penalty rates are designed wargame quantities, not ERCOT tariff rules.
-- FULL outcomes are approximate equilibria and PRICE outcomes are approximate coordinator fixed points. The report places convergence, work, and max_gain diagnostics beside every affected contrast.
+- FULL outcomes are approximate equilibria and PRICE outcomes are approximate coordinator fixed points; the report lists convergence rates and remaining unilateral gains next to each affected contrast.
 - No outages, causal intent, adaptive monitoring, attacks, or MARL policies are modeled yet.
 
 ## Next steps

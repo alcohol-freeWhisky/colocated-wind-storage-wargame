@@ -154,8 +154,8 @@ def _reliability_text(cell: str, reliability: dict[str, dict[str, float | str]])
             f"{cell}: game converged {100 * float(item['converged']):.1f}% of hours, "
             f"{float(item['work']):.2f} mean sweeps/hour; max_gain distribution: mean "
             f"${float(item['gain_mean']):.2f}, max ${float(item['gain_max']):.2f}; "
-            f"daily max_gain/C_P distribution: mean {float(item['gain_pct_mean']):.4f}%, "
-            f"max {float(item['gain_pct_max']):.4f}%"
+            f"daily max_gain/C_P distribution: mean {float(item['gain_pct_mean']):.2f}%, "
+            f"max {float(item['gain_pct_max']):.2f}%"
         )
     return (
         f"{cell}: price coordination converged {100 * float(item['converged']):.1f}% of hours, "
@@ -248,20 +248,19 @@ def _factor_sentence(
         headline = frame.iloc[0]
         sentence = (
             f"Central minus decentralized J is positive in {int((matched['mean_usd'] > 0).sum())} of "
-            f"{len(matched)} held-fixed cells. The perfect-foresight headline contrast, C_P minus the "
+            f"{len(matched)} held-fixed cells. The perfect-foresight contrast, C_P minus the "
             f"mean of its six decentralized matches, is ${headline.mean_usd:,.0f}/day "
-            f"({headline.mean_pct_cp:.3f}% of C_P). The expected nonnegative sign is confirmed."
+            f"({headline.mean_pct_cp:.1f}% of C_P)."
         )
     elif factor == "F2":
         sentence = (
             f"Every matched P minus F mean is positive. Effects range from ${frame['mean_usd'].min():,.0f} "
-            f"to ${frame['mean_usd'].max():,.0f}/day, confirming the expected value of better foresight."
+            f"to ${frame['mean_usd'].max():,.0f}/day."
         )
     elif factor == "F3":
         sentence = (
             f"Every INJ minus EQ mean is positive, from ${frame['mean_usd'].min():,.0f} to "
-            f"${frame['mean_usd'].max():,.0f}/day, confirming the expected benefit of causal overflow "
-            "shares and own-deficit charges. The medians show that this factor is heavy-tailed."
+            f"${frame['mean_usd'].max():,.0f}/day. The medians show that this effect has a heavy tail."
         )
     else:
         full_price = frame[frame["contrast"].str.contains("FULL - .*PRICE", regex=True)]
@@ -270,8 +269,8 @@ def _factor_sentence(
         sentence = (
             f"PRICE minus NONE is positive in {int((price_none['mean_usd'] > 0).sum())} of "
             f"{len(price_none)} held-fixed cells, as expected. FULL minus NONE is positive in "
-            f"{int((full_none['mean_usd'] > 0).sum())} of {len(full_none)} cells, so that expectation is "
-            f"mostly but not uniformly confirmed. FULL minus PRICE is negative in "
+            f"{int((full_none['mean_usd'] > 0).sum())} of {len(full_none)} cells, so the expected sign "
+            f"holds in most but not all of them. FULL minus PRICE is negative in "
             f"{int((full_price['mean_usd'] < 0).sum())} of {len(full_price)} cells."
         )
     return sentence + _tolerance_note(effects, factor, reliability)
@@ -511,7 +510,7 @@ def main() -> None:
 
     price_better = effects[(effects["factor"] == "F4") & effects["contrast"].str.contains("FULL - .*PRICE", regex=True)]
     price_explanation = (
-        "PRICE has higher mean J than FULL in all four held-fixed comparisons. This is not evidence that more information is worse. FULL is a non-cooperative equilibrium in which agents can still overshoot the POI when the price premium exceeds their marginal share of the overflow penalty. PRICE is a coordination mechanism whose fixed point approximates the central solution. The cells differ in both information and mechanism."
+        "PRICE has higher mean J than FULL in all four held-fixed comparisons. FULL is a non-cooperative equilibrium in which agents can still inject above K when the price premium exceeds their marginal share of the overflow penalty. PRICE is a coordination mechanism whose fixed point approximates the central solution. The two cells differ in both information and mechanism, so the contrast does not isolate the effect of information."
         if (price_better["mean_usd"] < 0).all()
         else "FULL and PRICE differ in both information and mechanism, so their contrast is not a pure information ordering."
     )
@@ -523,7 +522,7 @@ Course: MIT 6.974 Wargame, Fall 2026
 
 ## 1. Scope
 
-Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors matters most. The headline experiment is the 14-cell design matrix. The preliminary monitor calibration is included as a Part III input.
+Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors has the largest effect on realized system value. The main experiment is the 14-cell design matrix. A preliminary monitor calibration serves as a Part III input.
 
 ### Model
 
@@ -537,7 +536,7 @@ The configured window contains {len(complete_days)} complete 24-hour episodes an
 
 {resource_table}
 
-The system-level monitor-noise snapshot is from a different period than the operating experiment. This limitation is carried through the interpretation.
+The system-level monitor-noise snapshot is from a different period than the operating experiment.
 
 ## 3. Design factors and cells
 
@@ -545,11 +544,11 @@ The system-level monitor-noise snapshot is from a different period than the oper
 
 {_cell_table()}
 
-The cell ids and ordering above come from `code/wargame/experiments/design.py`. Every policy replans hourly over the remaining horizon, submits one hour, passes the joint action through the realization layer, and uses realized state of charge in the next hour.
+Cell ids and order are defined in `code/wargame/experiments/design.py`. Every policy replans hourly over the remaining horizon, submits one hour, passes the joint action through the realization layer, and uses realized state of charge in the next hour.
 
 ## 4. Results by factor
 
-All factor effects are matched daily contrasts on realized J from `design_matrix_effects.csv`. In every table, percentages of C_P are means of daily percentages, not ratios of aggregate means. Reliability is reported beside every contrast involving FULL or PRICE. For FULL, max_gain is the remaining unilateral-deviation gain; PRICE has no unilateral-deviation statistic. Because C_P is negative on some individual days, a signed daily max_gain/C_P ratio can make the mean percentage negative even though max_gain itself is nonnegative.
+All factor effects are matched daily contrasts on realized J from `design_matrix_effects.csv`. Percentages of C_P, including the mean max_gain percentages, are means of daily percentages; the maximum max_gain percentage is the maximum daily percentage. Solver reliability is listed beside every contrast involving FULL or PRICE. For FULL, max_gain is the remaining unilateral-deviation gain; PRICE has no unilateral-deviation statistic. Because C_P is negative on some individual days, a signed daily max_gain/C_P ratio can make the mean percentage negative even though max_gain itself is nonnegative.
 
 ### F1 control
 
@@ -557,15 +556,11 @@ Hypothesis: centralized control weakly increases J because it internalizes the s
 
 {factor_tables['F1']}
 
-*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
-
 ### F2 foresight
 
 Hypothesis: perfect remaining-horizon wind and RT-price foresight weakly increases J relative to COP-wind and DA-price forecasts. {factor_sentences['F2']}
 
 {factor_tables['F2']}
-
-*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
 ### F3 penalty allocation
 
@@ -573,19 +568,15 @@ Hypothesis: causal positive-injection overflow shares and own-deficit charges in
 
 {factor_tables['F3']}
 
-*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
-
 The daily INJ minus EQ effect averaged over its six matched F2/F4 cells exceeds $100 on {(f3_daily > 100).sum()} of {len(f3_daily)} days. The three largest days are:
 
 {f3_tail_table}
 
 ### F4 market information and coordination
 
-Hypothesis: PRICE and FULL should generally outperform NONE; FULL minus PRICE has no pure information interpretation because PRICE changes the mechanism. {factor_sentences['F4']}
+Hypothesis: PRICE and FULL generally have higher J than NONE; FULL minus PRICE has no pure information interpretation because PRICE changes the mechanism. {factor_sentences['F4']}
 
 {factor_tables['F4']}
-
-*Effect and mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
 
 {price_explanation}
 
@@ -595,7 +586,7 @@ Hypothesis: PRICE and FULL should generally outperform NONE; FULL minus PRICE ha
 
 ![Matched design effects](../../results/figures/fig_design_effects.png)
 
-*Bars show mean daily J contrasts; the underlying values are tabulated above.*
+*Bars show mean daily J contrasts.*
 
 ## 5. Full matrix and operating metrics
 
@@ -605,29 +596,27 @@ Hypothesis: PRICE and FULL should generally outperform NONE; FULL minus PRICE ha
 
 {operating_table}
 
-*Mean max_gain percentages are means of daily percentages of C_P. Maximum max_gain percentage is the maximum daily percentage.*
-
 Operating quantities are daily means from `design_matrix_summary.csv`. Penalty concentration is the largest agent share of allocated shortfall charges, with 1/N used when the total charge is zero. Realized overflow is zero by construction; attempted overflow records submitted actions before the POI controller intervenes.
 
 ## 6. Illustrative day trajectory
 
-The selected day is {trajectory_day}, which has the largest tabulated C_P minus D_P_EQ_FULL gap, ${trajectory_gap.loc[trajectory_day]:,.0f}. The figure compares those two design cells and shows both submitted aggregate injection and realized dispatch.
+The selected day is {trajectory_day}, which has the largest tabulated C_P minus D_P_EQ_FULL gap, ${trajectory_gap.loc[trajectory_day]:,.0f}.
 
 ![Design-matrix trajectory](../../results/figures/{trajectory_path.name})
 
 ## 7. Monitor calibration
 
-This preliminary Part III calibration maps observed forecast-error noise into false-positive probability q0, detection probability q1, required fine F*, and finite correction duration T*. The compact comparison below uses a {100 * monitor_tau:.0f}% nameplate threshold, {100 * monitor_withholding:.0f}% withholding, delta = {cfg['monitor']['delta']}, and a {monitor_delay}-hour delay.
+This preliminary Part III calibration maps observed forecast-error noise into false-positive probability q0, detection probability q1, required fine F*, and finite correction duration T*. The comparison uses a {100 * monitor_tau:.0f}% nameplate threshold, {100 * monitor_withholding:.0f}% withholding, delta = {cfg['monitor']['delta']}, and a {monitor_delay}-hour delay.
 
 {monitor_table}
 
 ![Empirical monitor ROC](../../results/figures/monitor_roc.png)
 
-The calibration is preliminary: it does not infer intent and is not yet coupled to adaptive agents or attacks.
+The calibration does not infer intent and is not yet coupled to adaptive agents or attacks.
 
 ## 8. Limitations and roadmap
 
-The operating results cover one spring window, one base site, five units, hourly resolution, and price-taking RT settlement. COP and DA forecasts are deterministic inputs, the delivery obligation and penalty rates are designed, and the model omits endogenous prices, outages, and two-settlement bidding. FULL results are approximate equilibria and PRICE results are approximate coordinator fixed points, so the solver diagnostics beside each affected contrast are part of the result.
+The operating results cover one spring window, one base site, five units, hourly resolution, and price-taking RT settlement. COP and DA forecasts are deterministic inputs, the delivery obligation and penalty rates are designed, and the model omits endogenous prices, outages, and two-settlement bidding. FULL results are approximate equilibria and PRICE results are approximate coordinator fixed points. Solver diagnostics appear beside each affected contrast.
 
 Next steps are to verify the hand-solved two-player example numerically, build the Part II partially observable multi-agent environment and CTDE/DTDE baselines, couple the monitor to simulated withholding, add adaptive enforcement and attacks, and resolve the forecast-error period mismatch.
 """

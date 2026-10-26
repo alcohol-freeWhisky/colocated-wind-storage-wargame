@@ -1,6 +1,6 @@
 # Strategic Coordination in Co-Located Wind-Storage Systems
 
-Part I asks how much realized system value is lost when co-located wind-storage units sharing one point of interconnection (POI) are operated by independent decision makers, and which of four design factors matters most: control, foresight, penalty allocation, or market information and coordination. The experiment compares 14 matched cells over 60 complete ERCOT operating days and evaluates every contrast on the realized system objective J.
+Part I measures how much system value is lost when co-located wind-storage units that share one point of interconnection (POI) are operated by independent decision makers, and which of four design factors accounts for the loss: control, foresight, penalty allocation, or market information. The experiment runs 14 cells over 60 complete ERCOT operating days and evaluates every contrast on the realized system objective J.
 
 ## Design factors
 
@@ -18,37 +18,39 @@ The 2 by 7 design has the following canonical cell ids, defined in `code/wargame
 | `P` | `C_P` | `D_P_INJ_FULL` | `D_P_INJ_PRICE` | `D_P_INJ_NONE` | `D_P_EQ_FULL` | `D_P_EQ_PRICE` | `D_P_EQ_NONE` |
 | `F` | `C_F` | `D_F_INJ_FULL` | `D_F_INJ_PRICE` | `D_F_INJ_NONE` | `D_F_EQ_FULL` | `D_F_EQ_PRICE` | `D_F_EQ_NONE` |
 
-## Model in one page
+## Model
 
 Each of five Anchor Wind units has available wind and a co-located battery. In every hour, its controller chooses curtailment `r`, battery charging `c`, and discharging `d`. Net injection is `q = W - r - c + d`; state of charge follows charging and discharging efficiency, stays within the battery energy bound, and returns to at least its initial daily level. The degradation cost is charged on discharge only, `c_deg * d`.
 
-The units share an export limit `K` at the POI and a system delivery obligation `D`. Planned shortfall is `(D - Q)+`, and planned overflow is `(Q - K)+`, where `Q` is aggregate injection. F3 determines how agents anticipate the resulting charges. F4 determines whether an agent sees other plans, responds to a coordinator's congestion price, or uses only its fixed share of POI capacity.
+The units share an export limit `K` at the POI and a system delivery obligation `D`. Planned shortfall is `(D - Q)+`, and planned overflow is `(Q - K)+`, where `Q` is aggregate injection. F3 sets how the resulting charges are divided among agents. F4 sets what an agent knows about the others: their plans, a coordinator's congestion price, or nothing beyond its own fixed share of POI capacity.
 
-Every cell is an hourly receding-horizon policy. It optimizes the remaining hours, submits the current action, and passes the joint action through a realization layer. If the submitted aggregate exceeds K, the POI controller cuts injections pro rata, first through additional wind curtailment and then through reduced discharge. Realized export therefore never exceeds K.
+Every cell is solved hour by hour. At each hour the decision makers optimize over the remaining hours of the day, submit the current hour's action, and the joint action goes through a realization step. If the submitted aggregate exceeds K, injections are cut pro rata, first by curtailing wind and then by reducing discharge, so realized export never exceeds K.
 
 The reported system objective is
 
 `J = realized energy profit - c_deg * realized discharge - lambda_minus * realized under-delivery`.
 
-The attempted-overflow penalty is a planning incentive and is not subtracted from J because the realization layer prevents physical overflow. See [docs/DESIGN.md](docs/DESIGN.md) for the complete implementation contract and [docs/two_player_formulation.md](docs/two_player_formulation.md) for the minimal two-player model and hand-solved example.
+The overflow penalty enters the agents' planning problems but not J, since the realization step prevents physical overflow. The full implementation contract is in [docs/DESIGN.md](docs/DESIGN.md). A two-player version of the model with a worked two-hour example is in [docs/two_player_formulation.md](docs/two_player_formulation.md).
 
 ## Experiments
 
+Each factor is measured as a difference in mean daily J between two cells that differ in that factor alone. Percentages are means of the daily ratio to C_P. All numbers below come from [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv); the figures are [`fig_design_matrix.png`](results/figures/fig_design_matrix.png) and [`fig_design_effects.png`](results/figures/fig_design_effects.png).
+
 ### F1 control
 
-The hypothesis is `C - D >= 0`: central control should weakly increase J because it internalizes the shared POI and obligation. The perfect-foresight headline contrast `C_P - mean(D_P_*)` is $1,101/day, with a $473/day median and a mean daily effect of 1.923% of C_P. All 12 held-fixed central-minus-decentralized mean contrasts are positive, so the data confirm the expected sign. Source: [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv); overview: [`fig_design_effects.png`](results/figures/fig_design_effects.png).
+Expected sign: C minus D is non-negative, because the central controller accounts for the shared POI and the shared obligation. Observed: C_P exceeds the mean of the six decentralized perfect-foresight cells by $1,101/day (median $473/day, 1.9% of C_P). All 12 matched central-minus-decentralized means are positive, and on no day does any decentralized cell exceed the central cell. The loss is smallest with causal penalty shares and price coordination (0.6%) and largest with equal shares and no information (3.3%).
 
 ### F2 foresight
 
-The hypothesis is `P - F >= 0`: accurate remaining-horizon wind and RT prices should weakly increase J. For the central cell, `C_P - C_F` is $6,613/day, with a $2,142/day median and a mean daily effect of 11.136% of C_P. All seven matched means are positive, ranging from $6,028 to $6,956/day, so the data confirm the expected sign and identify foresight as the largest factor. Source: [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv); matrix: [`fig_design_matrix.png`](results/figures/fig_design_matrix.png).
+Expected sign: P minus F is non-negative. Observed: C_P exceeds C_F by $6,613/day (median $2,142/day, 11.1% of C_P). The seven matched differences range from $6,028 to $6,956/day, all positive. Foresight is the largest of the four factors by an order of magnitude.
 
 ### F3 penalty allocation
 
-The hypothesis is `INJ - EQ >= 0`: causal overflow shares and own-deficit charges should align private incentives better than equal system-penalty shares. Under perfect foresight and FULL, the mean contrast is $1,255/day, or a mean daily 1.860% of C_P, while the median is only $11/day. All six held-fixed means are positive, confirming the expected sign, but the near-zero medians in several cells show that the effect is heavy-tailed. Source: [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv).
+Expected sign: INJ minus EQ is non-negative, because charging each agent for its own injection into an overflow and its own delivery deficit gives it a higher marginal cost of free riding than an equal split. Observed: under perfect foresight and full information the mean difference is $1,255/day (1.9% of C_P) but the median is $11/day. All six matched means are positive. The difference exceeds $100 on 28 of 60 days and is below -$100 on 14; the three largest days each contribute more than $9,000.
 
-### F4 market information and coordination
+### F4 market information
 
-The expected signs are `PRICE - NONE >= 0` and generally `FULL - NONE >= 0`; `FULL - PRICE` is not a pure information ordering because PRICE also changes the mechanism. Under perfect foresight and INJ, PRICE exceeds NONE by $688/day, FULL exceeds NONE by $562/day, and `FULL - PRICE` is -$126/day. PRICE beats NONE in all four held-fixed means, while FULL beats NONE in three of four, so the first expectation is confirmed and the second is mostly confirmed. PRICE also exceeds FULL in all four mean comparisons. This does not mean that more information is worse: FULL is a non-cooperative equilibrium that can overshoot the POI, while PRICE is a coordination mechanism whose fixed point approximates the central solution. Source: [`design_matrix_effects.csv`](results/tables/design_matrix_effects.csv).
+Expected signs: PRICE minus NONE and FULL minus NONE are non-negative. FULL minus PRICE has no expected sign, because the two cells differ in mechanism as well as in information. Observed, under perfect foresight and causal shares: PRICE exceeds NONE by $688/day and FULL exceeds NONE by $562/day; FULL is $126/day below PRICE. PRICE exceeds NONE in all four matched comparisons, FULL exceeds NONE in three of four, and PRICE exceeds FULL in all four. In FULL each agent best-responds to the others' plans and still injects into a congested hour whenever the price premium exceeds its marginal share of the overflow charge. In PRICE the coordinator raises the congestion price until the aggregate fits the POI, so the fixed point is close to the central solution.
 
 ## Data
 
@@ -64,14 +66,14 @@ code/wargame/                   Importable data, model, solver, monitor, and exp
 code/scripts/01_download_raw.py Download and cache the public source data.
 code/scripts/02_build_dataset.py Build the common processed dataset.
 code/scripts/05_monitor.py      Preliminary Part III monitor calibration.
-code/scripts/06_make_report.py  Generate the matrix-centered Workshop 1 report.
+code/scripts/06_make_report.py  Generate the Workshop 1 report.
 code/scripts/07_design_matrix.py Run or summarize the 14-cell Part I matrix.
 code/scripts/07b_tune_price_coordination.py Tune the PRICE fixed-point algorithm.
 data/raw/                       Untouched downloads; never edit by hand.
 data/interim/                   Cached per-day extracts.
 data/processed/                 Common dataset and provenance README.
-results/tables/design_matrix_*  Current Part I results and metadata.
-results/figures/fig_design_*    Current Part I figures.
+results/tables/design_matrix_*  Part I results and metadata.
+results/figures/fig_design_*    Part I figures.
 results/tables/trajectories/ Hourly dispatch for the plotted design-matrix day.
 results/figures/monitor_*       Preliminary Part III monitor figures.
 results/tables/monitor_*        Preliminary Part III monitor tables.
@@ -100,11 +102,11 @@ Run the current workflow from the repository root in this order:
 .venv/bin/python code/scripts/06_make_report.py --config config/base.yaml
 ```
 
-The committed design-matrix metadata records 1,033.9 seconds, about 17 minutes, for step 07 with four workers. The metadata written by steps 01, 02, and 05 does not record runtime; step 06 does not write result metadata. Cached data and committed matrix tables let collaborators run step 06 directly. Step 01 is needed only to extend or refresh the data window.
+Step 07 took 17 minutes with four workers (recorded in `results/tables/design_matrix_by_day.meta.json`). The processed data and the matrix tables are committed, so step 06 can be run on its own. Step 01 needs network access to ERCOT and EIA and is only needed to extend or refresh the data window.
 
 ## Status and next steps
 
-Workshop 1 Part I and the preliminary Part III monitor calibration are complete. Parts II and the remaining Part III work have not started. See [docs/PROGRESS.md](docs/PROGRESS.md) for the dated factor-by-factor status, decisions, limitations, and next steps.
+Part I and the preliminary monitor calibration for Part III are done. Part II and the rest of Part III have not started. Dated status, decisions, limitations, and next steps are in [docs/PROGRESS.md](docs/PROGRESS.md).
 
 ## Conventions
 
