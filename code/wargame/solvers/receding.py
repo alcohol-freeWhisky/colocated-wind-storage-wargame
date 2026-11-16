@@ -35,11 +35,9 @@ def forecast_subhorizon(episode: Episode, horizon_start: int) -> Episode:
         agents=episode.agents,
         W=wind,
         What=episode.What[:, horizon_start:],
-        b=episode.b[:, horizon_start:],
         pi_DA=episode.pi_DA[horizon_start:],
         pi_RT=prices,
         K=episode.K,
-        D=episode.D[horizon_start:],
         cfg=episode.cfg,
         day=episode.day,
     )
@@ -54,14 +52,30 @@ def perfect_subhorizon(episode: Episode, horizon_start: int) -> Episode:
         agents=episode.agents,
         W=episode.W[:, horizon_start:].copy(),
         What=episode.What[:, horizon_start:].copy(),
-        b=episode.b[:, horizon_start:].copy(),
         pi_DA=episode.pi_DA[horizon_start:].copy(),
         pi_RT=episode.pi_RT[horizon_start:].copy(),
         K=episode.K,
-        D=episode.D[horizon_start:].copy(),
         cfg=episode.cfg,
         day=episode.day,
     )
+
+
+def reachable_terminal_soc(
+    episode: Episode,
+    initial_soc: NDArray[np.float64],
+    requested: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Cap a return target at the SOC reachable in the current information view."""
+
+    if episode.cfg.get("battery", {}).get("terminal_soc", "return") != "return":
+        return requested.copy()
+    if episode.cfg.get("battery", {}).get("allow_grid_charging", False):
+        return requested.copy()
+    power = np.asarray([agent.battery.P for agent in episode.agents], dtype=float)[:, None]
+    eta = np.asarray([agent.battery.eta_c for agent in episode.agents], dtype=float)
+    maximum_charge = np.minimum(episode.W, power).sum(axis=1)
+    reachable = initial_soc + eta * maximum_charge
+    return np.minimum(requested, reachable)
 
 
 def _empty_trajectories(episode: Episode) -> tuple[NDArray[np.float64], ...]:
@@ -89,12 +103,9 @@ def _realization(
     max_delta: float | None = None,
     max_gain: float | None = None,
     sweep_log: list[dict[str, float]] | None = None,
-    price_iterations_by_hour: list[int] | None = None,
-    price_converged_by_hour: list[bool] | None = None,
-    price_max_overflow_by_hour: list[float] | None = None,
-    price_max_mu_by_hour: list[float] | None = None,
-    mu_by_hour: NDArray[np.float64] | None = None,
-    w_minus: NDArray[np.float64] | None = None,
+    information_iterations_by_hour: list[int] | None = None,
+    information_converged_by_hour: list[bool] | None = None,
+    aggregate_signal_by_hour: NDArray[np.float64] | None = None,
     w_plus: NDArray[np.float64] | None = None,
 ) -> Realization:
     aggregate = q.sum(axis=0)
@@ -110,8 +121,6 @@ def _realization(
         c_planned=c_plan,
         d_planned=d_plan,
         r_planned=r_plan,
-        Vminus=np.maximum(episode.D - aggregate, 0.0),
-        Vminus_planned=np.maximum(episode.D - aggregate_plan, 0.0),
         Vplus=np.maximum(aggregate - episode.K, 0.0),
         Vplus_attempted=np.maximum(aggregate_plan - episode.K, 0.0),
         profit=(episode.pi_RT[None, :] * q - costs * d).sum(axis=1),
@@ -125,12 +134,9 @@ def _realization(
         sweeps_by_hour=sweeps_by_hour,
         game_converged_by_hour=game_converged_by_hour,
         sweep_log=sweep_log,
-        price_iterations_by_hour=price_iterations_by_hour,
-        price_converged_by_hour=price_converged_by_hour,
-        price_max_overflow_by_hour=price_max_overflow_by_hour,
-        price_max_mu_by_hour=price_max_mu_by_hour,
-        mu_by_hour=mu_by_hour,
-        w_minus=w_minus,
+        information_iterations_by_hour=information_iterations_by_hour,
+        information_converged_by_hour=information_converged_by_hour,
+        aggregate_signal_by_hour=aggregate_signal_by_hour,
         w_plus=w_plus,
     )
 
@@ -161,7 +167,7 @@ def solve_receding_central(
             view,
             config,
             initial_soc=soc[:, t],
-            terminal_soc=terminal,
+            terminal_soc=reachable_terminal_soc(view, soc[:, t], terminal),
         )
         q_plan[:, t] = plan.q[:, 0]
         c_plan[:, t] = plan.c[:, 0]

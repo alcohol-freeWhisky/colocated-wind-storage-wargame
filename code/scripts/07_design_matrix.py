@@ -26,17 +26,10 @@ LOGGER = logging.getLogger("wargame.design_matrix")
 LIST_COLUMNS = {
     "per_agent_profit",
     "per_agent_profit_planned",
-    "per_agent_penalty_minus",
     "per_agent_penalty_plus",
     "per_agent_net_profit",
-    "per_agent_penalty_minus_eq",
-    "per_agent_penalty_plus_eq",
     "sweeps_by_hour",
     "game_converged_by_hour",
-    "price_iterations_by_hour",
-    "price_converged_by_hour",
-    "price_max_overflow_by_hour",
-    "price_max_mu_by_hour",
 }
 
 
@@ -44,9 +37,9 @@ def _trajectory(episode: Episode, cell: str, realization: Any) -> pd.DataFrame:
     records: list[dict[str, Any]] = []
     for t in range(episode.T):
         for i, agent in enumerate(episode.agents):
-            mu = np.nan
-            if realization.mu_by_hour is not None:
-                mu = realization.mu_by_hour[t, t]
+            signal = np.nan
+            if realization.aggregate_signal_by_hour is not None:
+                signal = realization.aggregate_signal_by_hour[t, t]
             records.append(
                 {
                     "day": str(episode.day),
@@ -59,13 +52,11 @@ def _trajectory(episode: Episode, cell: str, realization: Any) -> pd.DataFrame:
                     "d_i": realization.d[i, t],
                     "r_i": realization.r[i, t],
                     "soc_i": realization.soc[i, t + 1],
-                    "w_minus_i": realization.w_minus[i, t],
                     "w_plus_i": realization.w_plus[i, t],
-                    "mu": mu,
+                    "aggregate_signal": signal,
                     "Q": realization.q[:, t].sum(),
                     "Q_planned": realization.q_planned[:, t].sum(),
                     "K": episode.K,
-                    "D": episode.D[t],
                     "pi_RT": episode.pi_RT[t],
                 }
             )
@@ -84,31 +75,20 @@ def _run_day(task: tuple[str, list[str], dict[str, Any], list[str]]) -> dict[str
             elapsed = time.perf_counter() - started
             factors = parse_cell(cell)
             row = episode_metrics(episode, realization, cell)
+            if row["realized_overflow_mwh"] > 1e-6:
+                raise RuntimeError(f"{cell} violates the realized POI limit")
+            if row["simultaneous_charge_discharge_hours"]:
+                raise RuntimeError(f"{cell} has simultaneous realized charge/discharge")
+            if row["simultaneous_charge_discharge_planned_hours"]:
+                raise RuntimeError(f"{cell} has simultaneous planned charge/discharge")
+            if factors["control"] == "D" and not realization.converged:
+                raise RuntimeError(f"{cell} owner game did not converge")
             row.pop("regime", None)
             row.update({"cell": cell, **factors})
-            row["price_iterations_mean"] = (
-                float(np.mean(realization.price_iterations_by_hour))
-                if realization.price_iterations_by_hour
-                else np.nan
-            )
-            row["price_max_overflow_mwh"] = (
-                float(np.max(realization.price_max_overflow_by_hour))
-                if realization.price_max_overflow_by_hour
-                else np.nan
-            )
-            row["price_max_mu_usd_per_mwh"] = (
-                float(np.max(realization.price_max_mu_by_hour))
-                if realization.price_max_mu_by_hour
-                else np.nan
-            )
-            row["price_iterations_by_hour"] = realization.price_iterations_by_hour
-            row["price_converged_by_hour"] = realization.price_converged_by_hour
-            row["price_max_overflow_by_hour"] = realization.price_max_overflow_by_hour
-            row["price_max_mu_by_hour"] = realization.price_max_mu_by_hour
             row["game_converged_by_hour"] = realization.game_converged_by_hour
             row["converged"] = (
                 realization.converged
-                if factors["info"] in {"FULL", "PRICE"}
+                if factors["control"] == "D"
                 else np.nan
             )
             row["elapsed_s"] = elapsed
@@ -402,6 +382,10 @@ def main() -> None:
     failures = [item for item in outcomes if "error" in item]
     for failure in failures:
         LOGGER.error("day=%s failed: %s", failure["day"], failure["error"])
+    if failures:
+        raise SystemExit(
+            f"{len(failures)} selected day(s) failed; see results/logs/design_matrix.log"
+        )
     completed = [item for item in outcomes if "rows" in item]
     if not completed:
         raise SystemExit("Every selected day failed; see results/logs/design_matrix.log")
@@ -445,13 +429,9 @@ def main() -> None:
             )
 
     report = by_day.copy()
-    report["converged_fraction"] = report["game_converged_hours_frac"].combine_first(
-        report["price_converged_hours_frac"]
-    )
-    report["mean_sweeps_or_iterations"] = np.where(
-        report["info"].eq("FULL"),
-        report["sweeps"] / float(cfg.get("episode", {}).get("horizon_h", 24)),
-        report["price_iterations_mean"],
+    report["converged_fraction"] = report["game_converged_hours_frac"]
+    report["mean_sweeps_or_iterations"] = (
+        report["sweeps"] / float(cfg.get("episode", {}).get("horizon_h", 24))
     )
     means = report.groupby("cell", observed=True)[
         [

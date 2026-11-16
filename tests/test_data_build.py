@@ -141,9 +141,10 @@ def test_build_dataset_from_tiny_interim_fixture(tmp_path: Path) -> None:
     assert len(tables["wind_hourly"]) == 4
     assert set(tables["wind_hourly"]["n_5min"]) == {2}
     assert np.allclose(tables["wind_hourly"]["curtail_obs"], 1.0)
-    baseline = tables["forecast_hourly"].set_index("resource")["b_baseline"]
-    assert set(baseline.loc["WIND_A"]) == {9.0}
-    assert set(baseline.loc["WIND_B"]) == {7.0}
+    awards = tables["forecast_hourly"].set_index("resource")["b_dam"]
+    assert set(awards.loc["WIND_A"]) == {0.0}
+    assert set(awards.loc["WIND_B"]) == {7.0}
+    assert "b_baseline" not in tables["forecast_hourly"]
     assert tables["resources"]["nameplate_mw"].notna().all()
     assert set(tables["forecast_error_system"]["region"]) == {"SYSTEM WIDE", "WEST"}
     assert list(tables["forecast_error_system"].columns) == [
@@ -206,7 +207,6 @@ def test_dst_spring_day_is_explicitly_skipped(monkeypatch) -> None:
             "Interval Start": hours,
             "resource": "WIND_A",
             "What_cop": 5.0,
-            "b_baseline": 5.0,
         }
     )
     monkeypatch.setattr(

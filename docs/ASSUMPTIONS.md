@@ -2,8 +2,8 @@
 
 Every parameter in `config/base.yaml` is listed below with how it was obtained and whether it is
 observed (taken directly from public data), calibrated (set from public data or literature with a documented rule),
-or designed (a wargame variable chosen by us, with its experimental levels). Numbers are as of the dataset built on
-2026-10-21 from ERCOT operating days 2025-03-01 to 2025-04-30. Section numbers refer to `docs/proposal.tex`.
+or designed (a wargame variable chosen by us, with its experimental levels). Numbers are as of the dataset rebuilt on
+2026-11-16 from ERCOT operating days 2025-03-01 to 2025-04-30.
 
 ## 1. Data pipeline (observed inputs)
 
@@ -12,7 +12,7 @@ or designed (a wargame variable chosen by us, with its experimental levels). Num
 | 1.1 Prices | Hourly DAM and RTM settlement point prices at hub `HB_WEST`, calendar year 2025. RTM 15-min SPPs are averaged to hourly. | ERCOT Historical DAM SPP (NP4-180-ER) and Historical RTM SPP (NP6-785-ER), via `gridstatus` [R1] | Observed. West hub chosen because all pool resources are in the ERCOT West weather zone. |
 | 1.2 Available wind `W_it` | 5-min SCED `HSL` of each wind resource averaged to hourly. `HSL` is the telemetered *available* power, so the data do not already include curtailment, which the model treats as a decision variable. | ERCOT 60-Day SCED Disclosure (NP3-965-ER), table `sced_gen_resource`, `Resource Type == WIND` [R2] | Observed. Realised output (`Telemetered Net Output`) and `Base Point` are kept for diagnostics (observed curtailment at Anchor over the window is 0.1 % of available energy). |
 | 1.3 Own forecast `Ŵ_it` | Hourly `High Sustained Limit` from the Current Operating Plan snapshot taken at the start of the Adjustment Period (day-ahead for most hours). | ERCOT 60-Day COP Adjustment Period Snapshot [R2] | Observed. This is the QSE's own availability forecast, the agent's private forecast in §2. |
-| 1.4 Baseline `b_it` | DAM energy award (`Awarded Quantity`) when positive; otherwise `Ŵ_it`. Only 27 of 385 ERCOT wind resources had DAM awards on 2025-04-15, none at Anchor, so in practice `b = Ŵ`. | ERCOT 60-Day DAM Disclosure (NP3-966-ER), `dam_gen_resource` [R2] | Observed + documented rule. |
+| 1.4 DAM award `b_dam` | Resource-level DAM `Awarded Quantity`, retained when disclosed. It is never filled with COP HSL and is not used as an operating constraint. | ERCOT 60-Day DAM Disclosure (NP3-966-ER), `dam_gen_resource` [R2] | Observed; provenance/diagnostics only. |
 | 1.5 Nameplate `N_i` | 99.5th percentile of hourly HSL over the window (insensitive to telemetry spikes); maximum kept as `hsl_max`. | derived from 1.2 | Calibrated rule. Cross-checked against EIA-860 2023 (Horse Hollow: 735.5 MW in EIA vs 848 MW of HSL across 5 ERCOT resources; ERCOT splits units differently from EIA generator IDs). |
 | 1.6 Forecast-error samples | (a) System-wide and regional STWPF/WGRPP forecasts vs realised available HSL by horizon 1 to 168 h, normalised by a capacity proxy (max observed HSL per region in the snapshot window). (b) Resource-level COP HSL vs realised SCED HSL normalised by nameplate. | ERCOT Wind Power Production Hourly Averaged Actual and Forecasted Values (NP4-732-CD) and by Geographical Region (NP4-742-CD), rolling 8-day MIS window snapshotted 2026-10-13 … 10-20 [R3]; (b) from 1.2 and 1.3 | Observed. The system-level sample is from October 2026 because ERCOT does not archive these reports publicly; the resource-level sample is from the March to April 2025 window. STWPF is compared with realised *HSL* because realised *output* includes curtailment (see `docs/DEVIATIONS.md`). |
 | 1.7 Asset metadata | TX wind nameplate for Horse Hollow; distribution of TX battery duration (90 units, median 1.0 h); storage/wind power ratio of TX co-located wind+storage plants (4 plants in 2023: 0.04 to 0.24, median 0.08). | EIA-860 2023, sheets 3_2 (wind), 3_4 (energy storage), 3_1 (generators) [R4] | Observed. |
@@ -37,7 +37,7 @@ One operating day is one episode (24 hourly steps). Every pool resource has 100 
 | Round-trip efficiency | 85 % (η_c = η_d = 0.922) | Calibrated (literature) | NREL ATB utility-scale battery storage adopts 85 % as the representative round-trip efficiency, following Cole and Frazier (2019) / Cole et al. (2025) [R7]. |
 | Degradation cost `C_deg` | 10 $/MWh discharged | Calibrated (literature) | Marginal degradation cost of lithium-ion storage in dispatch studies ranges from ≈7 to 13 $/MWh-throughput (optimal marginal cost over the first 15 years) to ≈17 $/MWh levelised at 200 $/kWh pack cost [R8]; a full-cycle amortisation at 2,000 cycles gives ≈100 $/MWh as an upper bound [R9]. The model charges this cost on discharge `d` only. |
 | Initial / terminal SoC | 50 % of `E_i`; terminal SoC ≥ initial | Designed | Standard daily-cycle convention; prevents end-of-horizon dumping. Alternative `free` is implemented. |
-| Grid charging | Allowed (`q_it` may be negative) | Designed | ERCOT ESRs may charge from the grid; relevant because 20 % of RT hours in the window have negative prices at HB_WEST. |
+| Grid charging | Disabled in the base experiment | Designed | Charging is limited to available wind because the model includes an export POI limit but no corresponding import limit. This keeps the four-factor comparison physically matched. |
 | Tie-break cost | 1e-3 $/MWh on c + d + r | Numerical | Removes LP degeneracy (simultaneous charge and discharge); changes profits by < 0.01 %. |
 
 ## 4. Shared POI and system constraints (§3): designed variables with empirical anchors
@@ -45,10 +45,8 @@ One operating day is one episode (24 hourly steps). Every pool resource has 100 
 | Parameter | Value | Status | Basis |
 |---|---|---|---|
 | POI limit `K = kappa_K · Σ N_i` | kappa_K = 0.6 (designed stress level) | Designed | Context (not used as the value): LBNL 2025 [R6] reports that in CAISO's queue, the median combined wind+storage capacity is 142 % of the POI limit and wind capacity alone equals or exceeds the POI limit in 73 % of wind+storage plants. With a 0.29 storage ratio this implies K ≈ 0.9 × wind nameplate [R10]. At 0.9 the Anchor POI binds in only 18 % of hours, so the design uses 0.6, where it binds in 49 % of hours. |
-| Minimum delivery `D_t = delta_D · Σ_i b_it` | delta_D = 0.5 | Designed | Represents a market or contractual delivery commitment (§3). There is no ERCOT rule that imposes a minimum delivery on wind; ERCOT exempts intermittent renewable resources from the Base Point Deviation Charge in Protocols §6.6.5 [R11]. Kept as a stylized commitment and held fixed in the design matrix. |
-| Under-delivery penalty `lambda_minus` | 250 $/MWh | Designed, anchored | The economic exposure of an ERCOT resource that under-delivers against its day-ahead position is the RT price (two-settlement). 250 $/MWh lies between the 99th percentile (150 $/MWh) and the maximum (1,541 $/MWh) of HB_WEST RT prices in the window, and far below the ERCOT system-wide offer cap of 5,000 $/MWh and the Brattle survey VOLL of 35,685 $/MWh [R12]. |
 | Overflow penalty `lambda_plus` | 100 $/MWh | Designed | Applies only in the strategic layer (what agents *attempt*); physically the plant controller curtails pro rata above K (`solvers/realize.py`), so realised exports never exceed K. The value represents the controller's/QSE's internal enforcement price. |
-| Penalty allocation | `INJ` or `EQ` | Designed | INJ uses causal positive-injection overflow shares and own-deficit shortfall charges. EQ uses equal shares of system overflow and shortfall penalties. This is factor F3. |
+| Penalty allocation | `INJ` or `EQ` | Designed | INJ uses causal positive-injection shares; EQ uses equal shares. Both allocate the same aggregate attempted-overflow charge. This is factor F3. |
 | Settlement price | `pi_RT` | Designed | Agents are price takers at RT; the DA price is used only as the agents' price forecast. |
 
 ## 5. Part I design matrix (§4)
@@ -57,8 +55,8 @@ One operating day is one episode (24 hourly steps). Every pool resource has 100 
 |---|---|---|---|
 | F1 control | `C`, `D` | Designed | Central planner or independent decision makers. |
 | F2 foresight | `P`, `F` | Designed | True remaining-horizon wind/RT price or current truth followed by COP wind/DA price. |
-| F3 penalty allocation | `INJ`, `EQ` | Designed | Causal injection/own-deficit charges or equal system-penalty shares. |
-| F4 market information | `FULL`, `PRICE`, `NONE` | Designed | Other agents' plans, a coordinator congestion price, or neither. |
+| F3 penalty allocation | `INJ`, `EQ` | Designed | Causal positive-injection shares or equal attempted-overflow shares. |
+| F4 market information | `FULL`, `PRICE`, `NONE` | Designed | Owner-level plans, aggregate injection signal, or no current rival signal. `PRICE` is a slide-compatible identifier, not a price mechanism. |
 
 The canonical 14 cells are `C_P`, `C_F`, and `D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}`. All are hourly receding-horizon policies with the same realization layer and terminal SoC rule. Effects are matched daily contrasts on realized J. See `docs/DESIGN.md` section 4 for the complete contract.
 
@@ -66,16 +64,11 @@ The canonical 14 cells are `C_P`, `C_F`, and `D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}
 
 | Parameter | Value | Status | Basis |
 |---|---:|---|---|
-| FULL maximum best-response sweeps | 200 | Designed | Upper limit for each hourly game. |
-| FULL residual tolerance | `1e-5 × ΣN` | Designed | Undamped best-response residual. |
-| FULL maximum unilateral gain | $1 | Designed | Required together with the residual test for convergence. |
-| PRICE proximal coefficient `tau` | 2.0 | Designed | Grid-selected numerical regularizer; excluded from reported economic costs. |
-| PRICE coordination step `rho` | 0.2 $/MWh per MW, constant | Designed | Grid-selected predictor-corrector dual step. |
-| PRICE maximum iterations | 60 | Designed | Upper limit for each hourly coordinator solve. |
-| PRICE overflow tolerance | `1e-3 × ΣN` MW | Designed | Maximum positive aggregate overflow stopping test. |
-| PRICE complementary-slackness tolerance | $1/hour | Designed | Maximum `mu × (K-Q)+` stopping test. |
-| PRICE price-change tolerance | $0.01/MWh | Designed | Used with the aggregate-injection-change alternative stopping test. |
-| Warm starts | enabled | Designed | Prior-hour plan and price tails initialize the next receding-horizon solve. |
+| Informed maximum best-response sweeps | 200 | Designed | Common upper limit for FULL and aggregate-signal cells. |
+| Residual tolerance | `1e-5 × ΣN` | Diagnostic | Triggers an immediate payoff check; it is reported but is not a rejection rule because best responses may be non-unique. |
+| Maximum unilateral gain | $1 | Designed | One-dollar epsilon-Nash criterion, checked at least every five sweeps. |
+| Damping | 0.5 | Designed | Common update damping for FULL and aggregate-signal cells. |
+| Warm starts | enabled | Designed | Prior-hour plan tails initialize the next informed solve. |
 
 ## 7. Monitor calibration (§4, Part III)
 
@@ -103,4 +96,4 @@ The canonical 14 cells are `C_P`, `C_F`, and `D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}
 - [R11] ERCOT. *Nodal Protocols, Section 6.6.5 Base Point Deviation Charges* (intermittent renewable resources exempt; tolerances in §6.6.5.1.1). https://www.ercot.com/mktrules/nprotocols.
 - [R12] The Brattle Group (2024). *Value of Lost Load Study for the ERCOT Region.* https://brattle.com/wp-content/uploads/2024/09/Value-of-Lost-Load-Study-for-the-ERCOT-Region.pdf; Public Utility Commission of Texas, system-wide offer cap 5,000 $/MWh (16 TAC §25.505).
 - [R13] Texas RE and ERCOT (2016). *Wind Operations Issues* (STWPF day-ahead and hour-ahead MAPE as % of installed capacity). https://www.texasre.org/Documents/Reliability%20Services/Weatherization%20Presenations/Texas%20RE%20and%20ERCOT%20Wind%20Operations%20Issues%20-%202016.pdf.
-- [R14] Salazar-Peña, N., Tabares, A., and González-Mancera, A. (2026). MARLEM. *Applied Energy*, 412, 127546; von Stengel, B. (2016). Recursive inspection games. *Mathematics of Operations Research*, 41(3); and the other references in `docs/proposal.tex`.
+- [R14] Salazar-Peña, N., Tabares, A., and González-Mancera, A. (2026). MARLEM. *Applied Energy*, 412, 127546; von Stengel, B. (2016). Recursive inspection games. *Mathematics of Operations Research*, 41(3).

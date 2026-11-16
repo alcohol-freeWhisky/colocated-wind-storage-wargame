@@ -36,12 +36,10 @@ battery:                                # CALIBRATED from the observed Anchor Wi
   eps_tiebreak_usd_per_mwh: 1.0e-3      # tiny LP tie-break cost on c + d + r ($/MWh)
   soc_init_frac: 0.5
   terminal_soc: return                  # return | free
-  allow_grid_charging: true
+  allow_grid_charging: false             # wind-only charging keeps q_i >= 0 and avoids an unmodeled POI withdrawal limit
 
 poi:                                    # DESIGNED wargame variables
   kappa_K: 0.6                          # designed stress level at which the POI binds in ~49% of hours for the Anchor set (LBNL median wind+storage = 142% of POI is context only)
-  delta_D: 0.5                          # D_t = delta_D * sum_i b_it
-  lambda_minus: 250.0                   # $/MWh under-delivery penalty
   lambda_plus: 100.0                    # $/MWh attempted POI overflow penalty (strategic layer)
 
 episode:
@@ -50,23 +48,15 @@ episode:
 design_matrix:                          # full factorial
   cells: all                            # "all" or an explicit list of cell ids
   day_stride: 1
-  price_coordination:
-    proximal_tau: 2.0                   # numerical QP regularizer, $/MWh per MW; grid-selected
-    step_usd_per_mwh_per_mw: 0.2        # constant rho; selected by 3-day grid
-    step_decay: none                    # none | sqrt
-    max_iterations: 60
-    overflow_tol_rel: 1.0e-3            # x sum(N) MW
-    cs_tol_usd: 1.0                     # complementary-slackness tolerance, $/hour
-    warm_start: true
   game_warm_start: true
 
 game:
   max_sweeps: 200
   tol_rel: 1.0e-5                       # undamped best-response residual max|BR_q - q| / sum(N)
-  max_gain_tol: 1.0                     # $ ; converged also requires max unilateral-deviation gain <= this
+  max_gain_tol: 1.0                     # $ ; epsilon-Nash convergence threshold on maximum unilateral payoff gain
+  gain_check_interval: 5                # sweeps; epsilon-Nash payoff check handles non-unique best responses
   damping: 0.5
   deviation_check: true
-  injection_shortfall: own              # own | phi ; INJ agents pay their own private deficit by default
 
 monitor:
   thresholds_sigma: [0.5, 1.0, 1.5, 2.0, 2.5, 3.0]

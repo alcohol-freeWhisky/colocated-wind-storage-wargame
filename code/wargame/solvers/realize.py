@@ -25,8 +25,6 @@ class Realization:
     c_planned: NDArray[np.float64]
     d_planned: NDArray[np.float64]
     r_planned: NDArray[np.float64]
-    Vminus: NDArray[np.float64]
-    Vminus_planned: NDArray[np.float64]
     Vplus: NDArray[np.float64]
     Vplus_attempted: NDArray[np.float64]
     profit: NDArray[np.float64]
@@ -40,12 +38,9 @@ class Realization:
     sweeps_by_hour: list[int] | None = None
     game_converged_by_hour: list[bool] | None = None
     sweep_log: list[dict[str, float]] | None = None
-    price_iterations_by_hour: list[int] | None = None
-    price_converged_by_hour: list[bool] | None = None
-    price_max_overflow_by_hour: list[float] | None = None
-    price_max_mu_by_hour: list[float] | None = None
-    mu_by_hour: NDArray[np.float64] | None = None
-    w_minus: NDArray[np.float64] | None = None
+    information_iterations_by_hour: list[int] | None = None
+    information_converged_by_hour: list[bool] | None = None
+    aggregate_signal_by_hour: NDArray[np.float64] | None = None
     w_plus: NDArray[np.float64] | None = None
 
     @property
@@ -90,6 +85,17 @@ def realize_hour(
         charge[i] = min(charge[i], battery.P)
         discharge[i] = min(discharge[i], battery.P)
         curtail[i] = min(curtail[i], wind[i])
+        if charge[i] > tol and discharge[i] > tol:
+            round_trip = battery.eta_c * battery.eta_d
+            reduction = min(charge[i], discharge[i] / round_trip)
+            loss = 1.0 - round_trip
+            if loss > tol:
+                reduction = min(reduction, max(wind[i] - curtail[i], 0.0) / loss)
+            charge[i] -= reduction
+            discharge[i] -= round_trip * reduction
+            curtail[i] = min(curtail[i] + loss * reduction, wind[i])
+        if charge[i] > 1e-7 and discharge[i] > 1e-7:
+            raise RuntimeError("Simultaneous battery charging and discharging is infeasible")
         trial = start[i] + battery.eta_c * charge[i] - discharge[i] / battery.eta_d
         if trial < 0:
             discharge[i] = battery.eta_d * (start[i] + battery.eta_c * charge[i])
@@ -176,8 +182,6 @@ def realize(episode: Episode, plan: Any) -> Realization:
         c_planned=c_plan.copy(),
         d_planned=d_plan.copy(),
         r_planned=r_plan.copy(),
-        Vminus=np.maximum(episode.D - aggregate, 0.0),
-        Vminus_planned=np.maximum(episode.D - aggregate_plan, 0.0),
         Vplus=np.maximum(aggregate - episode.K, 0.0),
         Vplus_attempted=np.maximum(aggregate_plan - episode.K, 0.0),
         profit=profit.sum(axis=1),
