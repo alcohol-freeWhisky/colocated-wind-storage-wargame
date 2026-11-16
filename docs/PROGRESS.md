@@ -18,6 +18,6 @@
 - [x] Rebuild report, tables, figures, and representative trajectories.
 - [x] Pass the full unit-test suite.
 - [x] Confirm obsolete price-coordination artifacts are absent.
-- [ ] Commit and push the verified revision to `origin/main`.
+- [x] Commit and push the verified revision to `origin/main`.
 
 This checklist is updated only from executed evidence.
