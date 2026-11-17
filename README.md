@@ -75,7 +75,7 @@ $$
 Wind-only charging implies $q_{it}\ge0$. The nominal terminal constraint is $s_{i,24}\ge s_{i0}$. At replanning hour $h$, the target is reduced if the original target cannot be reached using the wind available in the current information view:
 
 $$
-s_i^{target}(h)=\min\left\{s_{i0},\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right\}.
+s_i^{target}(h)=\min\left(s_{i0},\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right).
 $$
 
 Both centralized and decentralized cases use this rule. Consequently, restoration of the original initial SOC is not guaranteed in every forecast episode.
@@ -84,7 +84,7 @@ The optimization problems use continuous variables. A small activity cost and a 
 
 ## 4. Decision models
 
-Let $\mathcal T_h=\{h,\ldots,23\}$ denote the remaining operating horizon.
+Let $\mathcal T_h=\lbrace h,\ldots,23\rbrace$ denote the remaining operating horizon.
 
 ### Centralized dispatch
 
@@ -141,7 +141,7 @@ $$
 With nonnegative injections, this gives proportional export acceptance:
 
 $$
-\widetilde q_{it}=q_{it}\min\{1,K/Q_t\}\qquad(Q_t>0).
+\widetilde q_{it}=q_{it}\min\lbrace 1,K/Q_t\rbrace\qquad(Q_t>0).
 $$
 
 Within each owner's assigned reduction, the implementation proceeds as follows:
@@ -166,8 +166,8 @@ Wind export and battery discharge are not independently scaled by a common facto
 The 14 cases are
 
 $$
-\{C_P,C_F\}\ \cup\
-\{D_{f,a,m}:f\in\{P,F\},\ a\in\{INJ,EQ\},\ m\in\{FULL,PRICE,NONE\}\}.
+\lbrace C_P,C_F\rbrace \cup
+\lbrace D_{f,a,m}:f\in\lbrace P,F\rbrace,\ a\in\lbrace INJ,EQ\rbrace,\ m\in\lbrace FULL,PRICE,NONE\rbrace\rbrace.
 $$
 
 Allocation and rival-information levels apply only to decentralized cases.
