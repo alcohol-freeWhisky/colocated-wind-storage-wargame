@@ -1,82 +1,298 @@
-# Shared Wind-Storage Wargame
+# Shared Wind–Storage Wargame
 
-This repository studies independent wind-battery owners that share one point of
-interconnection (POI). The primary experiment is the 14-cell ablation table in
-`workshop1_recreated.pdf`: control, foresight, overflow-penalty allocation, and
-information are varied one factor at a time.
+This repository compares centralized and decentralized operation of wind–battery resources sharing a point of interconnection (POI). The experiment varies foresight, overflow-charge allocation, and access to other owners' planned injections. It measures their effects on realized operating value, curtailment, battery use, and attempted POI overflow.
 
-## Research question
+## 1. Experiment
 
-How much operating value is lost when co-located resources decide separately,
-and how much of that loss is explained by forecast error, blame allocation, and
-limited information?
+| Item | Base case |
+|---|---|
+| Resources | Five Anchor Wind units, each modeled as a separate wind–battery owner |
+| Operating window | March 1–April 30, 2025 |
+| Episodes | 60 complete 24-hour days; the daylight-saving transition day is excluded |
+| Resolution | Hourly |
+| Dispatch | Reoptimize over the remaining day and execute the first hour |
+| Cases | 14 cases per day; 840 day–case observations |
+| Prices | Exogenous ERCOT HB_WEST day-ahead and real-time prices |
+| Evaluation | Realized energy revenue less battery discharge degradation |
 
-The operating model intentionally has **no minimum-generation requirement and no
-shortfall penalty**. A DAM award and a COP forecast are different ERCOT data:
+Separate ownership and the shared export limit are experimental assumptions. The model does not reproduce the site's actual ownership, ERCOT dispatch, or market settlement. Each day starts from the same prescribed battery state of charge; storage and information do not carry across days.
 
-- `b_dam` is a resource's disclosed day-ahead cleared energy award. It is kept
-  in the processed data for provenance but is not an operating constraint.
-- `What_cop` is the resource's COP High Sustained Limit and is the wind
-  availability forecast used in forecast-foresight cells.
-- `W_avail` is hourly SCED HSL and is the realized available wind input.
+## 2. Inputs and notation
 
-## Operating model
+Time steps have duration $\Delta t=1$ hour. The equations below omit this factor.
 
-For owner `i` and hour `t`, `q_it = W_it - r_it - c_it + d_it`, where `r`, `c`,
-and `d` are wind curtailment, battery charging, and battery discharging.
-Charging is wind-only in the base experiment, so `c_it + r_it <= W_it`.
-Battery power, energy, efficiency, initial state of charge, and terminal state
-constraints apply to every cell.
-
-The shared export limit is `K = 0.6 * sum(nameplate)`. Owner plans may attempt to
-exceed it and incur the same fixed `lambda_plus = 100 $/MWh` charge in every
-owner cell. The realization layer scales exports pro rata so realized total
-export never exceeds `K`. It does not remove unexecuted battery discharge from
-state of charge.
-
-Each owner maximizes its own planned real-time energy revenue less battery
-degradation and its allocated attempted-overflow charge. System comparisons use
-the same realized metric in every cell:
-
-```text
-J = realized RT energy revenue - discharge degradation cost
-```
-
-The attempted-overflow charge is an internal strategic rule, so it is reported
-separately and not subtracted from system value.
-
-## Four matched dimensions
-
-| Dimension | Levels | What changes |
+| Symbol | Code field | Definition |
 |---|---|---|
-| Control | `C` planner / `D` owners | One joint optimization or independent owner best responses |
-| Foresight | `P` perfect / `F` forecast | Remaining-horizon realized wind and RT price, or current truth followed by COP wind and DA price |
-| Penalty | `INJ` causal / `EQ` equal | Allocation of the same aggregate attempted-overflow charge |
-| Information | `FULL` / `PRICE` / `NONE` | Owner-level plans, aggregate injection signal, or no current rival signal |
+| $i=1,\ldots,N$ | `primary_agents` | Owner index; $N=5$ |
+| $t=0,\ldots,23$ | `horizon_h` | Hour within an operating day |
+| $W_{it}$ | `W_avail` | Realized available wind, from hourly SCED HSL (MW) |
+| $\widehat W_{it}$ | `What_cop` | Wind availability forecast, from COP HSL (MW) |
+| $\pi_t^{RT}$ | `pi_RT` | Real-time price ($/MWh) |
+| $\pi_t^{DA}$ | `pi_DA` | Day-ahead price ($/MWh) |
+| $b_{it}^{DAM}$ | `b_dam` | Disclosed day-ahead energy award; retained for provenance only |
+| $N_i$ | `nameplate` | Calibrated wind nameplate capacity (MW) |
+| $c_{it},d_{it},r_{it}$ | `c`, `d`, `r` | Planned charging, discharging, and wind curtailment (MW) |
+| $s_{it}$ | `soc` | Battery state of charge (MWh) |
+| $q_{it}$ | planned `q` | Requested net export (MW) |
+| $\widetilde q_{it},\widetilde d_{it}$ | realized `q`, `d` | Executed export and discharge (MW) |
 
-`PRICE` is retained only as the cell ID used in the slide table. In this revised
-experiment it means **aggregate signal**, not a congestion price and not a
-different coordination mechanism. FULL and aggregate use the same sequential
-best-response algorithm. Their payoff, constraints, penalty rate, stopping
-criteria, and realization are identical. Because the payoff is aggregative,
-owner identities may add no value beyond the aggregate; equality is a valid
-ablation result rather than a coding shortcut.
+SCED HSL is used as available wind, rather than metered generation. DAM awards impose no minimum-delivery obligation. COP HSL supplies the wind forecast; it is not substituted for DAM awards.
 
-The 14 canonical cells are `C_P`, `C_F`, and
-`D_{P|F}_{INJ|EQ}_{FULL|PRICE|NONE}`.
+### Base parameters
 
-## Data
+| Parameter | Value |
+|---|---|
+| Battery power | $P_i=0.29N_i$ |
+| Battery energy capacity | $E_i=1.5P_i$ |
+| Charge and discharge efficiencies | $\eta_c=\eta_d=0.922$ |
+| Initial SOC | $s_{i0}=0.5E_i$ |
+| Discharge degradation cost | $g_i=10$ $/MWh |
+| Shared export limit | $K=0.6\sum_iN_i$ |
+| Attempted-overflow charge | $\lambda=100$ $/MWh |
+| Activity tie-break cost | $\epsilon=10^{-3}$ $/MWh |
+| Charging source | Wind only |
 
-The base case uses five Anchor Wind ERCOT resources from 2025-03-01 through
-2025-04-30. Sixty complete 24-hour days are evaluated; the daylight-saving day
-is excluded. Inputs include ERCOT hourly DAM/RT prices, SCED HSL, COP HSL, DAM
-awards, resource metadata, and calibrated co-located battery parameters.
+Battery sizing is calibrated to observed co-located storage. The POI ratio and overflow charge are design parameters. Parameter sources are documented in [ASSUMPTIONS.md](docs/ASSUMPTIONS.md); executable settings are in [base.yaml](config/base.yaml).
 
-See [ASSUMPTIONS.md](docs/ASSUMPTIONS.md) for sources and parameter provenance,
-[DESIGN.md](docs/DESIGN.md) for the implementation contract, and
-[two_player_formulation.md](docs/two_player_formulation.md) for the minimal game.
+## 3. Physical constraints
 
-## Reproduce
+Owner $i$ chooses charging, discharging, and curtailment subject to
+
+$$
+q_{it}=W_{it}-r_{it}-c_{it}+d_{it},
+$$
+
+$$
+0\le c_{it}\le P_i,\qquad 0\le d_{it}\le P_i,\qquad
+r_{it}\ge0,\qquad c_{it}+r_{it}\le W_{it},
+$$
+
+$$
+s_{i,t+1}=s_{it}+\eta_c c_{it}-\frac{d_{it}}{\eta_d},
+\qquad 0\le s_{it}\le E_i.
+$$
+
+Wind-only charging implies $q_{it}\ge0$. The nominal terminal constraint is $s_{i,24}\ge s_{i0}$. At replanning hour $h$, the target is reduced if the original target cannot be reached using the wind available in the current information view:
+
+$$
+s_i^{target}(h)=\min\left\{s_{i0},\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right\}.
+$$
+
+Both centralized and decentralized cases use this rule. Consequently, restoration of the original initial SOC is not guaranteed in every forecast episode.
+
+The optimization problems use continuous variables. A small activity cost and a cycle-removal transformation address simultaneous charging and discharging; formal runs also check the resulting plans and executed dispatches.
+
+## 4. Decision models
+
+Let $\mathcal T_h=\{h,\ldots,23\}$ denote the remaining operating horizon.
+
+### Centralized dispatch
+
+The planner jointly chooses all owners' dispatches:
+
+$$
+\max\sum_{t\in\mathcal T_h}\sum_i
+\left[\pi_t^{view}q_{it}-g_id_{it}
+-\epsilon(c_{it}+d_{it}+r_{it})\right],
+$$
+
+subject to the physical constraints and a hard POI limit:
+
+$$
+\sum_iq_{it}\le K\qquad\forall t\in\mathcal T_h.
+$$
+
+### Decentralized dispatch
+
+Each owner chooses its own dispatch, taking the available rival-injection signal as given:
+
+$$
+\max U_i=\sum_{t\in\mathcal T_h}
+\left[\pi_t^{view}q_{it}-g_id_{it}
+-\lambda w_{it}V_t
+-\epsilon(c_{it}+d_{it}+r_{it})\right],
+$$
+
+where
+
+$$
+V_t=\left[\sum_jq_{jt}-K\right]_+.
+$$
+
+Owners have no individual POI quota and no hard aggregate export constraint in their planning problems. The charge discourages attempted overflow.
+
+| Allocation | Weight $w_{it}$ |
+|---|---|
+| Equal (`EQ`) | $1/N$ |
+| Injection-based (`INJ`) | $q_{it}^{+}/\sum_jq_{jt}^{+}$; equal fallback when the denominator is zero |
+
+For either allocation, the charges evaluated at a common profile sum to $\lambda V_t$. The injection-based best response accounts for the dependence of the owner's share on its own decision. The code calls this rule “causal”; its precise definition is the positive-injection share above.
+
+Owner objectives use **planned** energy revenue. They do not incorporate the physical export-reduction map below into their revenue calculation. The experiment therefore evaluates this planning incentive together with the specified realization rule.
+
+## 5. Physical realization
+
+The realization layer checks battery bounds and enforces the shared export limit. If total requested export $Q_t$ exceeds $K$, each owner's assigned reduction is
+
+$$
+\Delta q_{it}=(Q_t-K)\frac{q_{it}^{+}}{\sum_jq_{jt}^{+}}.
+$$
+
+With nonnegative injections, this gives proportional export acceptance:
+
+$$
+\widetilde q_{it}=q_{it}\min\{1,K/Q_t\}\qquad(Q_t>0).
+$$
+
+Within each owner's assigned reduction, the implementation proceeds as follows:
+
+| Order | Adjustment |
+|---|---|
+| 1 | Increase wind curtailment |
+| 2 | Reduce battery discharge, retaining the unexecuted energy subject to battery headroom |
+| 3 | Record any remaining reduction as inverter-side dissipation (`spill`) |
+
+Wind export and battery discharge are not independently scaled by a common factor. The next optimization starts from the executed SOC.
+
+## 6. Experimental design
+
+| Factor | Levels | Comparison |
+|---|---|---|
+| Control | `C`, `D` | Joint planner versus independent owners |
+| Foresight | `P`, `F` | Realized future inputs versus forecast future inputs |
+| Charge allocation | `INJ`, `EQ` | Injection-based versus equal shares |
+| Rival information | `FULL`, `PRICE`, `NONE` | Owner plans, aggregate signal, or zero-rival assumption |
+
+The 14 cases are
+
+$$
+\{C_P,C_F\}\ \cup\
+\{D_{f,a,m}:f\in\{P,F\},\ a\in\{INJ,EQ\},\ m\in\{FULL,PRICE,NONE\}\}.
+$$
+
+Allocation and rival-information levels apply only to decentralized cases.
+
+### Foresight
+
+| Level | Current hour | Remaining future hours |
+|---|---|---|
+| Perfect (`P`) | Realized wind and RT price | Realized wind and RT price |
+| Forecast (`F`) | Realized wind and RT price | COP wind and DA price |
+
+Forecast cases assume knowledge of current-hour wind and RT price. DA price is a proxy for future RT price, rather than a separate settlement leg. COP forecasts are read from the input data; the simulation does not train a forecasting model.
+
+### Rival information
+
+| Level | Inputs to the best-response problem |
+|---|---|
+| `FULL` | Rival plans reduced to aggregate net injection and aggregate positive injection |
+| `PRICE` | The same two aggregate quantities, without owner-level identities |
+| `NONE` | Both rival quantities set to zero |
+
+`PRICE` is a historical case identifier for **aggregate information**, not a congestion price. FULL and PRICE use the same update algorithm and the same sufficient aggregate inputs. Their equality in this implementation follows from the aggregative payoff structure.
+
+NONE represents a zero-rival planning assumption. It is not a Bayesian game with unknown capacities.
+
+## 7. Solution and acceptance criteria
+
+At each hour, the simulation constructs the remaining-horizon information view, solves the planning problem, executes the first hour, and updates SOC.
+
+| Setting | Value or method |
+|---|---|
+| Centralized problem | Joint continuous optimization |
+| Equal-share best response | Continuous linear optimization |
+| Injection-based best response | Convex formulation solved with Clarabel |
+| Informed owner updates | Sequential best responses; signal refreshed after each owner update |
+| Damping | 0.5 |
+| Maximum sweeps | 200 per remaining-horizon game |
+| NONE updates | One independent solve per owner |
+| Acceptance threshold | Maximum unilateral payoff gain at most $1 |
+
+For FULL and PRICE, the numerical equilibrium check is
+
+$$
+\max_i\left[\max_{a_i'}U_i(a_i',a_{-i})-U_i(a_i,a_{-i})\right]\le1\text{ dollar}.
+$$
+
+This checks an approximate equilibrium of the remaining-horizon **planning** game under the current information view. It does not establish an equilibrium of the full stochastic dynamic game.
+
+For NONE, deviation gains are also evaluated against zero rival injection. Its convergence flag certifies the individual perceived problems, not a Nash equilibrium of the actual joint profile. Best-response iteration involves no statistical learning or belief updates.
+
+Formal runs reject failed convergence checks, realized POI overflow, and simultaneous charging/discharging in planned or realized operation. Dispatch residuals are retained as diagnostics; acceptance is based on payoff gains.
+
+## 8. Evaluation and completed run
+
+All cases use the same realized system-value metric:
+
+$$
+J=\sum_{t,i}\left[\pi_t^{RT}\widetilde q_{it}-g_i\widetilde d_{it}\right].
+$$
+
+Overflow charges are internal incentives and are reported separately. Neither those charges nor the numerical activity cost is deducted from $J$.
+
+### Mean daily system value ($/day, rounded)
+
+| Foresight | Planner | INJ full | INJ aggregate | INJ none | EQ full | EQ aggregate | EQ none |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| P | 61,951 | 61,801 | 61,801 | 60,015 | 61,358 | 61,358 | 60,015 |
+| F | 58,524 | 58,177 | 58,177 | 56,244 | 57,541 | 57,541 | 56,247 |
+
+### Selected matched contrasts
+
+| Contrast | Interpretation | Mean difference ($/day) |
+|---|---|---:|
+| $C_P-D_{P,INJ,FULL}$ | Centralized versus decentralized control | 149.47 |
+| $C_P-C_F$ | Foresight under centralized control | 3,426.98 |
+| $D_{F,INJ,FULL}-D_{F,EQ,FULL}$ | Charge allocation under forecast inputs | 635.42 |
+| $D_{F,INJ,FULL}-D_{F,INJ,NONE}$ | Rival signal under forecast inputs | 1,932.53 |
+| FULL minus aggregate | Owner identities beyond aggregate inputs | 0 |
+
+The recorded run was generated on November 16, 2026. It contains 60 days and 840 day–case observations, with no failed days. The reported owner convergence-hour fractions are all 1, subject to the interpretation in Section 7. Realized export and simultaneous-operation checks passed. Full results are in the [Workshop 1 report](docs/workshop1/report.md).
+
+Metadata sidecars record creation time, runtime, configuration hash, and the Git HEAD at execution. The recorded HEAD, `981b613`, predates the commit of the revised implementation; that field alone does not identify the uncommitted source used to generate the results.
+
+## 9. Scope
+
+| Component | Status |
+|---|---|
+| Wind–battery dispatch, SOC, hourly prices and wind forecasts | Included in the operating experiment |
+| Shared physical export constraint and overflow-charge allocation | Included |
+| Full, aggregate, and zero-rival information cases | Included |
+| Detection probabilities, false positives, deterrence fines and sanction duration | Separate monitoring module; no feedback into operating decisions |
+| Hidden capacity, strategic capacity reports, report-based allocation | Not implemented |
+| Inspection probabilities updated from violation history | Not implemented in the operating experiment |
+| Bayesian learning, Q-learning, or learning rival types | Not implemented |
+| Demand-based interpretation of $K$ or endogenous market clearing | Not implemented; $K$ is an export limit |
+| Minimum-generation obligation or delivery-shortfall penalty | Absent from the operating model |
+
+The monitor's `shortfall` denotes a statistical forecast residual, not proof of misconduct. Its discount and delay parameters belong to separate deterrence calculations. Results from the operating experiment do not validate a capacity-misreporting model or its propositions.
+
+## 10. Repository map
+
+| Component | Source |
+|---|---|
+| Dataset construction | [`build_dataset.py`](code/wargame/data/build_dataset.py) |
+| Centralized solver | [`central.py`](code/wargame/solvers/central.py) |
+| Owner objective and constraints | [`agent_lp.py`](code/wargame/solvers/agent_lp.py) |
+| Best responses, charge shares, deviation checks | [`game.py`](code/wargame/solvers/game.py) |
+| Information views, terminal targets, centralized receding horizon | [`receding.py`](code/wargame/solvers/receding.py) |
+| Decentralized receding horizon and case definitions | [`design_matrix.py`](code/wargame/solvers/design_matrix.py) |
+| Physical realization | [`realize.py`](code/wargame/solvers/realize.py) |
+| Experiment entry point | [`07_design_matrix.py`](code/scripts/07_design_matrix.py) |
+| Monitoring entry point | [`05_monitor.py`](code/scripts/05_monitor.py) |
+
+| Output | Location |
+|---|---|
+| Daily results | `results/tables/design_matrix_by_day.csv` |
+| Summary, pivot, and matched contrasts | `results/tables/design_matrix_{summary,pivot,effects}.csv` |
+| Representative trajectories | `results/tables/trajectories/`; current representative day: March 29, 2025 |
+| Figures | `results/figures/fig_design_*.{png,pdf}` |
+| Report | `docs/workshop1/report.{md,html}` |
+| Metadata | Corresponding `.meta.json` sidecars |
+
+## 11. Reproduction
+
+Run from the repository root:
 
 ```bash
 python -m venv .venv
@@ -87,15 +303,6 @@ PYTHONPATH=code .venv/bin/python code/scripts/06_make_report.py --config config/
 PYTHONPATH=code .venv/bin/python -m pytest -q
 ```
 
-Primary outputs are `results/tables/design_matrix_*.csv`, one representative
-trajectory per cell under `results/tables/trajectories/`, the design figures in
-`results/figures/`, and `docs/workshop1/report.{md,html}`. Every table has a
-metadata sidecar. The formal run fails if any owner game does not converge,
-realized POI export exceeds `K`, or simultaneous charging/discharging remains.
+Dataset construction requires local raw inputs; the download entry point is `code/scripts/01_download_raw.py`. Report generation reads existing artifacts without rerunning the experiment. Monitoring is run separately through `05_monitor.py`.
 
-## Scope
-
-This is a stylized price-taking operating game, not a complete ERCOT market
-clearing or settlement model. The proportional realization rule and internal
-overflow charge are experimental assumptions. The model does not claim that an
-ERCOT DAM award is a physical minimum-output instruction.
+Further documentation: [implementation contract](docs/DESIGN.md), [model assumptions](docs/ASSUMPTIONS.md), [deviations from ERCOT practice](docs/DEVIATIONS.md), and [release checklist](docs/PROGRESS.md).
