@@ -2,7 +2,7 @@
 
 This repository compares centralized and decentralized operation of wind–battery resources sharing a point of interconnection (POI). The experiment varies foresight, overflow-charge allocation, and access to other owners' planned injections. It measures their effects on realized operating value, curtailment, battery use, and attempted POI overflow.
 
-## 1. Experiment
+## 1. Setting and assumptions
 
 | Item | Base case |
 |---|---|
@@ -15,7 +15,7 @@ This repository compares centralized and decentralized operation of wind–batte
 | Prices | Exogenous ERCOT HB_WEST day-ahead and real-time prices |
 | Evaluation | Realized energy revenue less battery discharge degradation |
 
-Separate ownership and the shared export limit are experimental assumptions. The model does not reproduce the site's actual ownership, ERCOT dispatch, or market settlement. Each day starts from the same prescribed battery state of charge; storage and information do not carry across days.
+**Assumption 1 (Operating environment).** Owners take prices as given, wind availability is nonnegative, and $K>0$. Battery power and energy capacities are finite, $0<\eta_c,\eta_d\le1$, and the initial SOC lies within battery bounds. Separate ownership and the shared export limit are experimental assumptions. The model does not reproduce the site's actual ownership, ERCOT dispatch, or market settlement. Each day starts from the same prescribed battery state of charge; storage and information do not carry across days.
 
 ## 2. Inputs and notation
 
@@ -54,9 +54,9 @@ SCED HSL is used as available wind, rather than metered generation. DAM awards i
 
 Battery sizing is calibrated to observed co-located storage. The POI ratio and overflow charge are design parameters. Parameter sources are documented in [ASSUMPTIONS.md](docs/ASSUMPTIONS.md); executable settings are in [base.yaml](config/base.yaml).
 
-## 3. Physical constraints
+## 3. Feasible dispatch
 
-Owner $i$ chooses charging, discharging, and curtailment subject to
+**Definition 1 (Owner feasibility).** At a fixed information view and initial SOC, the feasible set $\mathcal A_i$ consists of charging, discharging, curtailment, and SOC trajectories satisfying
 
 $$
 q_{it}=W_{it}-r_{it}-c_{it}+d_{it},
@@ -72,13 +72,27 @@ s_{i,t+1}=s_{it}+\eta_c c_{it}-\frac{d_{it}}{\eta_d},
 \qquad 0\le s_{it}\le E_i.
 $$
 
-Wind-only charging implies $q_{it}\ge0$. The nominal terminal constraint is $s_{i,24}\ge s_{i0}$. At replanning hour $h$, the target is reduced if the original target cannot be reached using the wind available in the current information view:
+**Lemma 1 (Nonnegative requested export).** Every feasible wind-only dispatch satisfies $q_{it}\ge0$.
+
+*Proof.* The charging constraint gives $W_{it}-r_{it}-c_{it}\ge0$. Adding $d_{it}\ge0$ proves the claim. $\square$
+
+**Definition 2 (Terminal target).** The nominal terminal constraint is $s_{i,24}\ge s_{i0}$. At replanning hour $h$, the target is reduced if the original target cannot be reached using the wind available in the current information view:
 
 $$
 s_i^{target}(h)=\min\left(s_{i0},\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right).
 $$
 
-Both centralized and decentralized cases use this rule. Consequently, restoration of the original initial SOC is not guaranteed in every forecast episode.
+**Lemma 2 (Feasibility of the terminal target).** In exact arithmetic, the target above can be attained or exceeded within the owner's physical constraints, with no discharge and no grid charging.
+
+*Proof.* With no discharge, the maximum attainable final SOC is
+
+$$
+s_i^{max}(h)=\min\left(E_i,\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right).
+$$
+
+Charging up to the power and wind limits until the battery is full attains this value. Since $s_{i0}\le E_i$, the prescribed target does not exceed $s_i^{max}(h)$. Charging absorbs wind and remaining wind can be curtailed, so this construction also respects any positive export limit. $\square$
+
+Both centralized and decentralized cases use this target. The lemma establishes feasibility of the revised target, not restoration of the original initial SOC in every forecast episode.
 
 The optimization problems use continuous variables. A small activity cost and a cycle-removal transformation address simultaneous charging and discharging; formal runs also check the resulting plans and executed dispatches.
 
@@ -86,7 +100,7 @@ The optimization problems use continuous variables. A small activity cost and a 
 
 Let $\mathcal T_h=\lbrace h,\ldots,23\rbrace$ denote the remaining operating horizon.
 
-### Centralized dispatch
+### Definition 3. Centralized planning problem
 
 The planner jointly chooses all owners' dispatches:
 
@@ -102,7 +116,7 @@ $$
 \sum_iq_{it}\le K\qquad\forall t\in\mathcal T_h.
 $$
 
-### Decentralized dispatch
+### Definition 4. Decentralized planning game
 
 Each owner chooses its own dispatch, taking the available rival-injection signal as given:
 
@@ -126,13 +140,21 @@ Owners have no individual POI quota and no hard aggregate export constraint in t
 | Equal (`EQ`) | $1/N$ |
 | Injection-based (`INJ`) | $q_{it}^{+}/\sum_jq_{jt}^{+}$; equal fallback when the denominator is zero |
 
-For either allocation, the charges evaluated at a common profile sum to $\lambda V_t$. The injection-based best response accounts for the dependence of the owner's share on its own decision. The code calls this rule “causal”; its precise definition is the positive-injection share above.
+**Lemma 3 (Allocation of the aggregate charge).** At any common dispatch profile, either rule allocates exactly the aggregate attempted-overflow charge:
+
+$$
+\sum_i\lambda w_{it}V_t=\lambda V_t.
+$$
+
+*Proof.* Equal weights sum to one. Injection-based weights sum to one whenever total positive injection is nonzero; the equal fallback also sums to one. Multiplication by $\lambda V_t$ gives the identity. $\square$
+
+This identity compares allocations at a fixed profile. It does not imply that the two games produce the same dispatch or total charge. The injection-based best response accounts for the dependence of the owner's share on its own decision. The code calls this rule “causal”; its precise definition is the positive-injection share above.
 
 Owner objectives use **planned** energy revenue. They do not incorporate the physical export-reduction map below into their revenue calculation. The experiment therefore evaluates this planning incentive together with the specified realization rule.
 
-## 5. Physical realization
+## 5. Realization map and export feasibility
 
-The realization layer checks battery bounds and enforces the shared export limit. If total requested export $Q_t$ exceeds $K$, each owner's assigned reduction is
+**Definition 5 (Realization map).** The realization layer checks battery bounds and enforces the shared export limit. If total requested export $Q_t$ exceeds $K$, each owner's assigned reduction is
 
 $$
 \Delta q_{it}=(Q_t-K)\frac{q_{it}^{+}}{\sum_jq_{jt}^{+}}.
@@ -152,7 +174,15 @@ Within each owner's assigned reduction, the implementation proceeds as follows:
 | 2 | Reduce battery discharge, retaining the unexecuted energy subject to battery headroom |
 | 3 | Record any remaining reduction as inverter-side dissipation (`spill`) |
 
-Wind export and battery discharge are not independently scaled by a common factor. The next optimization starts from the executed SOC.
+**Theorem 1 (Feasibility of realized aggregate export).** Suppose the requests entering the reduction step are nonnegative and each assigned reduction is executed through curtailment, reduced discharge, or spill. In exact arithmetic,
+
+$$
+0\le\sum_i\widetilde q_{it}=\min(Q_t,K)\le K.
+$$
+
+*Proof.* If $Q_t\le K$, no reduction is required. If $Q_t>K$, Lemma 1 gives $\sum_iq_{it}^{+}=Q_t$. The assigned reductions sum to $Q_t-K$, and each reduction is at most its owner's request. Subtracting them leaves total export $K$ and preserves nonnegativity. $\square$
+
+The implementation applies this identity after battery-bound adjustments and checks the aggregate limit with numerical tolerances. Wind export and battery discharge are not independently scaled by a common factor. The next optimization starts from the executed SOC.
 
 ## 6. Experimental design
 
@@ -189,7 +219,24 @@ Forecast cases assume knowledge of current-hour wind and RT price. DA price is a
 | `PRICE` | The same two aggregate quantities, without owner-level identities |
 | `NONE` | Both rival quantities set to zero |
 
-`PRICE` is a historical case identifier for **aggregate information**, not a congestion price. FULL and PRICE use the same update algorithm and the same sufficient aggregate inputs. Their equality in this implementation follows from the aggregative payoff structure.
+`PRICE` is a historical case identifier for **aggregate information**, not a congestion price.
+
+**Theorem 2 (Sufficiency of aggregate rival injections).** Fix an owner's wind and price view, initial and terminal SOC, allocation rule, and rival profile. Its feasible set and payoff depend on rivals only through
+
+$$
+R_{it}=\sum_{j\ne i}q_{jt},\qquad
+R_{it}^{+}=\sum_{j\ne i}q_{jt}^{+}.
+$$
+
+Consequently, FULL and aggregate information define the same best-response problem and the same best-response correspondence.
+
+*Proof.* Rivals do not enter the owner's battery or wind constraints. They enter attempted overflow through $[q_{it}+R_{it}-K]_+$ and the injection-based share through $q_{it}^{+}/(q_{it}^{+}+R_{it}^{+})$. Equal sharing requires only $R_{it}$. No other rival quantity appears in the objective. Thus two rival profiles with the same aggregate signals yield identical optimization problems. $\square$
+
+**Corollary 2.1 (Matched update paths).** Given identical initialization, owner order, damping, stopping rules, and best-response selection, FULL and aggregate cases have identical update paths in exact arithmetic.
+
+*Proof.* Their first best-response problems coincide by Theorem 2. The selected solutions and damped updates therefore coincide. Induction over owner updates and sweeps proves the claim. $\square$
+
+The selection qualification matters when best responses are nonunique. The completed numerical run reports zero differences between the two information cases.
 
 NONE represents a zero-rival planning assumption. It is not a Bayesian game with unknown capacities.
 
@@ -208,21 +255,25 @@ At each hour, the simulation constructs the remaining-horizon information view, 
 | NONE updates | One independent solve per owner |
 | Acceptance threshold | Maximum unilateral payoff gain at most $1 |
 
-For FULL and PRICE, the numerical equilibrium check is
+**Definition 6 (Planning-game deviation gain).** For FULL and PRICE, define the maximum unilateral payoff gain at the returned profile by the left-hand side below. The numerical acceptance rule is
 
 $$
 \max_i\left[\max_{a_i'}U_i(a_i',a_{-i})-U_i(a_i,a_{-i})\right]\le1\text{ dollar}.
 $$
 
-This checks an approximate equilibrium of the remaining-horizon **planning** game under the current information view. It does not establish an equilibrium of the full stochastic dynamic game.
+**Proposition 1 (Interpretation of the acceptance rule).** If the deviation problems are solved globally and the maximum gain is at most one dollar, the returned feasible profile is a one-dollar approximate Nash equilibrium of the remaining-horizon planning game under its current information view.
+
+*Proof.* By definition of the maximum gain, no feasible unilateral deviation improves any owner's planning payoff by more than one dollar. This is precisely the approximate Nash condition. $\square$
+
+Numerical solver error affects the certificate. This proposition is conditional on the returned gain; it does not prove that sequential best responses converge, that the solution is unique, or that the executed policy is an equilibrium of the full stochastic dynamic game.
 
 For NONE, deviation gains are also evaluated against zero rival injection. Its convergence flag certifies the individual perceived problems, not a Nash equilibrium of the actual joint profile. Best-response iteration involves no statistical learning or belief updates.
 
 Formal runs reject failed convergence checks, realized POI overflow, and simultaneous charging/discharging in planned or realized operation. Dispatch residuals are retained as diagnostics; acceptance is based on payoff gains.
 
-## 8. Evaluation and completed run
+## 8. Evaluation and numerical observations
 
-All cases use the same realized system-value metric:
+**Definition 7 (Realized system value).** All cases use the same metric:
 
 $$
 J=\sum_{t,i}\left[\pi_t^{RT}\widetilde q_{it}-g_i\widetilde d_{it}\right].
@@ -230,14 +281,14 @@ $$
 
 Overflow charges are internal incentives and are reported separately. Neither those charges nor the numerical activity cost is deducted from $J$.
 
-### Mean daily system value ($/day, rounded)
+**Numerical observation 1 (Mean daily value).** The completed run produced the following averages ($/day, rounded). These are sample results, not general payoff-ordering theorems.
 
 | Foresight | Planner | INJ full | INJ aggregate | INJ none | EQ full | EQ aggregate | EQ none |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | P | 61,951 | 61,801 | 61,801 | 60,015 | 61,358 | 61,358 | 60,015 |
 | F | 58,524 | 58,177 | 58,177 | 56,244 | 57,541 | 57,541 | 56,247 |
 
-### Selected matched contrasts
+**Numerical observation 2 (Matched contrasts).** The same run produced the following daily mean differences.
 
 | Contrast | Interpretation | Mean difference ($/day) |
 |---|---|---:|
@@ -251,7 +302,7 @@ The recorded run was generated on November 16, 2026. It contains 60 days and 840
 
 Metadata sidecars record creation time, runtime, configuration hash, and the Git HEAD at execution. The recorded HEAD, `981b613`, predates the commit of the revised implementation; that field alone does not identify the uncommitted source used to generate the results.
 
-## 9. Scope
+## 9. Limits of the formal statements
 
 | Component | Status |
 |---|---|
@@ -264,6 +315,8 @@ Metadata sidecars record creation time, runtime, configuration hash, and the Git
 | Bayesian learning, Q-learning, or learning rival types | Not implemented |
 | Demand-based interpretation of $K$ or endogenous market clearing | Not implemented; $K$ is an export limit |
 | Minimum-generation obligation or delivery-shortfall penalty | Absent from the operating model |
+
+The lemmas and theorems above concern the defined operating model. No theorem of equilibrium existence, best-response convergence, planner dominance in the reported metric, or superiority of one charge allocation is asserted here.
 
 The monitor's `shortfall` denotes a statistical forecast residual, not proof of misconduct. Its discount and delay parameters belong to separate deterrence calculations. Results from the operating experiment do not validate a capacity-misreporting model or its propositions.
 
