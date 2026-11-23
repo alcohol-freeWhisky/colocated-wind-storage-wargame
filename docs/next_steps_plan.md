@@ -1,13 +1,13 @@
 # Two Simulation Extensions for the Wind–Storage Game
 
-The proposed work has two branches. The first studies how operators learn about one another under imperfect information. The second studies strategic reporting and reserve compliance under limited monitoring.
+The proposed work has two branches. The first studies how operators learn about one another under imperfect information. The second studies one operator and one monitor, with false wind derating at low prices and reserve depletion at high prices.
 
 | | Part I: Opponent Learning | Part II: Strategic Compliance and Monitoring |
 |---|---|---|
-| Players | Wind–storage operators | Wind–storage operators and one market monitor |
-| Strategic decision | Dispatch based on beliefs about rivals | Availability reports, dispatch, and reserve compliance |
+| Players | Wind–storage operators | One wind–storage operator and one market monitor |
+| Strategic decision | Dispatch based on beliefs about rivals | Low-price false derating and high-price SOC violations |
 | Information problem | Rivals' generation, SOC, and operating policies are hidden | The monitor observes noisy signals of violations |
-| Main comparison | Learned beliefs versus fixed predictions and full information | Operator behavior under different investigation policies and capacities |
+| Main comparison | Learned beliefs versus fixed predictions and full information | Compliance and monitoring responses in low- and high-price periods |
 | Main outcome | Value of learning and its effect on congestion | Noncompliance, deterrence, and investigation efficiency |
 
 Both branches use the current hourly wind–storage environment, exogenous electricity prices, and a shared export limit. Each is evaluated separately against matched controls.
@@ -103,147 +103,190 @@ Use the existing 60-day window with a chronological 30-day training, 10-day vali
 
 The central hypothesis is that learning shifts exports away from periods of high expected rival injection. The experiment measures when that response creates value and how it depends on battery flexibility and the overflow allocation rule.
 
-## Part II. Strategic Reporting, Reserve Compliance, and Monitoring
+## Part II. One Operator and One Monitor under Low and High Prices
 
 ### Research question
 
-How do operators choose availability reports and battery dispatch when violations can increase profit but investigations are limited? How should a monitor allocate investigations across operators using imperfect evidence?
+How does a wind–storage operator respond to low and high electricity prices when a monitor can investigate and penalize noncompliance? The two price regimes create different incentives: withholding wind availability to charge at low prices, and discharging below the reserve requirement at high prices.
 
 ### Setup
 
-There are three wind–storage operators and one Independent Market Monitor. The horizon is 24 hours. Operators know future prices and their own available wind. They choose reported wind availability and battery dispatch while anticipating a publicly specified monitoring policy.
+The game has two players: one wind–storage operator and one Independent Market Monitor. Prices are exogenous. The operator knows its available wind and the price trajectory, controls its availability report and battery dispatch, and anticipates the monitor's investigation policy.
 
-The wind and battery equations are the same as in Part I. Two contractual obligations create the compliance decisions: a report-dependent wind dispatch responsibility and an exogenous minimum SOC requirement.
-
-### Wind availability reports and dispatch responsibility
-
-Owner $i$ reports $R_{it}$ and may understate true availability:
+Begin with two periods, low price followed by high price:
 
 $$
-0\le R_{it}\le W_{it},\qquad f_{it}=W_{it}-R_{it}.
+\pi_L<\pi_H.
 $$
 
-Let $A_{it}$ be the wind-retention allowance authorized for storage or curtailment. Eligible wind export and assigned wind responsibility are
+The battery connects the periods through its SOC. The same model then extends to 24 hourly periods containing low- and high-price intervals.
+
+| Price regime | Operator's compliant action | Operator's noncompliant action | Monitor's target |
+|---|---|---|---|
+| Low price | Report true wind availability and meet assigned wind dispatch | Underreport wind availability, reduce assigned export, and charge more wind for later sale | False wind derating |
+| High price | Discharge while maintaining the required SOC | Discharge additional energy below the reserve floor | Minimum SOC violation |
+
+### Physical operation and dispatch responsibility
+
+Omit the owner index because there is one operator. Wind export, net export, and battery dynamics are
 
 $$
-e_{it}=[R_{it}-A_{it}]_+,
+g_t=W_t-c_t-r_t,\qquad q_t=g_t+d_t,
 $$
 
 $$
-B_{it}=e_{it}\min\left(1,\frac{K^{POI}}{\sum_je_{jt}}\right),
+s_{t+1}=s_t+\eta_c c_t-\frac{d_t}{\eta_d},
 $$
 
-with $B_{it}=0$ when total eligible export is zero. The operator must schedule wind export
-
 $$
-g_{it}=W_{it}-c_{it}-r_{it}\ge B_{it}.
-$$
-
-When the POI is nonbinding and $R_{it}\ge A_{it}$, this condition becomes
-
-$$
-c_{it}+r_{it}\le A_{it}+f_{it}.
+0\le c_t,d_t\le P,\qquad r_t\ge0,\qquad
+c_t+r_t\le W_t,\qquad 0\le s_t\le E.
 $$
 
-Underreporting therefore expands the amount of wind that can be retained rather than assigned to current export. An operator may use that flexibility to charge at low prices and sell later at high prices. Physical charging remains bounded by true wind and battery limits.
-
-Use $A_{it}=0$ for the strict dispatch-obligation case and a positive allowance to study authorized charging. Record POI-directed reductions separately and deduct them from the operator's delivery responsibility.
-
-### Minimum SOC obligation
-
-Each battery has a specified reserve requirement $S_{i,t+1}^{req}$. The end-of-hour reserve violation is
+Each period lasts one hour. Charging uses wind. The assigned wind dispatch equals reported availability:
 
 $$
-v_{it}=[S_{i,t+1}^{req}-s_{i,t+1}]_+.
+B_t=R_t,\qquad 0\le R_t\le W_t,\qquad g_t\ge B_t.
 $$
 
-Compliant dispatch satisfies $s_{i,t+1}\ge S_{i,t+1}^{req}$. A noncompliant operator may discharge below this requirement while remaining within the physical bound $s_{i,t+1}\ge0$.
+Here $B_t$ is the wind-delivery responsibility; battery discharge contributes additional export. Under truthful reporting, $R_t=W_t$, so available wind is assigned to current delivery. Underreporting reduces this responsibility and permits wind retention for charging. A nonbinding export limit isolates the reporting and reserve incentives in this branch.
 
-This creates a second intertemporal incentive: high prices can make additional discharge profitable even when it breaches the reserve obligation.
+### Low-price decision: false wind derating
 
-### Monitor information and investigations
-
-The monitor observes reports, assigned dispatch, accepted injections, prices, weather-based wind estimates, SOC telemetry, and past investigation outcomes. Its signals include
+The false derate is
 
 $$
-z_{it}^{W}=W_{it}^{weather}-R_{it},\qquad
-z_{it}^{S}=S_{i,t+1}^{req}-s_{i,t+1}^{telemetry}.
+f_L=W_L-R_L\ge0.
 $$
 
-The monitor chooses investigations after observing current operational signals:
+The dispatch obligation implies
 
 $$
-a_{it}^{M}\in\lbrace0,1\rbrace,\qquad
-\sum_i a_{it}^{M}\le L_t^{audit}.
+c_L+r_L\le f_L.
 $$
 
-One investigation checks both wind reporting and reserve compliance. The audit capacity $L_t^{audit}$ is distinct from the export capacity $K^{POI}$.
+Thus charging an additional amount $x$ of low-price wind requires a corresponding reduction in reported availability. If that energy can be discharged and sold in the high-price period, its incremental operating gain is
 
-For violation type $k\in\lbrace W,S\rbrace$, let $D_{it}^k$ indicate a true violation and $Y_{it}^k$ an adverse investigative finding. Conditional evidence quality is described by
+$$
+G_W(x)=\left[\eta_c\eta_d(\pi_H-g^{deg})-\pi_L\right]x,
+$$
+
+subject to battery power, energy, and terminal constraints. The term $\pi_Lx$ is the foregone low-price sale; $\eta_c\eta_dx$ is the later delivered energy.
+
+The low-price experiment compares truthful dispatch against strategic underreporting as the price spread and expected enforcement cost vary.
+
+### High-price decision: minimum SOC violation
+
+The battery has an exogenous end-of-period reserve requirement $S_{t+1}^{req}$. The high-price violation is
+
+$$
+v_H=[S_{H+1}^{req}-s_{H+1}]_+.
+$$
+
+Compliant operation maintains $s_{H+1}\ge S_{H+1}^{req}$. Noncompliant operation may discharge below the reserve floor while respecting the physical bound $s_{H+1}\ge0$.
+
+If compliant dispatch would finish exactly at the reserve floor, an additional discharge $y$ creates a reserve deficit $y/\eta_d$ and an immediate gain
+
+$$
+G_S(y)=(\pi_H-g^{deg})y.
+$$
+
+For the two-period experiment, the reserve floor determines the required terminal SOC of the compliant policy. Both policies receive the same exogenous terminal energy value $\Phi(s_{H+1})$, so the full incremental gain also includes the change in remaining battery value. The noncompliant policy can finish below the contractual floor and face enforcement.
+
+### Monitor information and action
+
+The monitor observes reported wind, assigned dispatch, realized export, prices, a weather-based estimate of wind availability, SOC telemetry, and investigation history. Its two screening signals are
+
+$$
+z_L^W=W_L^{weather}-R_L,\qquad
+z_H^S=S_{H+1}^{req}-s_{H+1}^{telemetry}.
+$$
+
+At each period, the monitor chooses whether to investigate the operator:
+
+$$
+a_t^M\in\lbrace0,1\rbrace.
+$$
+
+Monitoring effort is allocated across time and violation types. A daily investigation budget can be imposed as
+
+$$
+\sum_ta_t^M\le L^{audit}.
+$$
+
+In the two-period case, $L^{audit}=1$ forces a choice between investigating low-price reporting and high-price reserve compliance. Compare this with no investigation and the ability to investigate both periods.
+
+An investigation verifies wind availability and operating records in the low-price period, or battery SOC and reserve compliance in the high-price period. Initially, investigated violations are revealed perfectly. Imperfect investigation introduces type-specific false positives and missed violations.
+
+For type $k\in\lbrace W,S\rbrace$, write
 
 $$
 \alpha_k=P(Y^k=1\mid D^k=0,a^M=1),\qquad
-\beta_k=P(Y^k=1\mid D^k=1,a^M=1).
+\beta_k=P(Y^k=1\mid D^k=1,a^M=1),
 $$
 
-Perfect investigation sets $\alpha_k=0$ and $\beta_k=1$. Imperfect investigation varies false-positive and detection probabilities. Weather and telemetry noise determine screening quality separately from investigative evidence quality.
-
-An adverse finding triggers a fixed type-specific fine:
+where $D^k$ denotes a true violation and $Y^k$ an adverse investigative finding. The fine is
 
 $$
-F_i=\sum_{t,k}a_{it}^{M}Y_{it}^k\overline F_k.
+F=\overline F_Wa_L^MY_L^W+\overline F_Sa_H^MY_H^S.
 $$
 
 ### Operator and monitor objectives
 
-Operators maximize expected realized profit:
+The operator chooses reporting and battery operation to maximize
 
 $$
-\max U_i=\mathbb E\sum_t
-\left[\pi_t\widetilde q_{it}
--g_i^{deg}\widetilde d_{it}
--\lambda^{ov}w_{it}V_t\right]-\mathbb E[F_i].
+\max U=\mathbb E\left[
+\sum_t(\pi_tq_t-g^{deg}d_t)+\Phi(s_T)-F
+\right].
 $$
 
-The overflow charge and enforcement fine are separate incentives. The first prices attempted congestion; the second sanctions reporting or reserve violations.
-
-The monitor minimizes investigation costs, wrongful findings, and undetected violations:
+The monitor minimizes investigation costs, false-positive sanctions, and missed violations:
 
 $$
-\min C_M=\mathbb E\sum_{t,i}
-\left[c_a a_{it}^{M}
-+c_{FP}\sum_k(1-D_{it}^k)a_{it}^{M}Y_{it}^k
-+c_{miss}\sum_kD_{it}^k(1-a_{it}^{M}Y_{it}^k)\right].
+\min C_M=\mathbb E\left[
+\sum_tc_aa_t^M+
+\sum_{k\in\lbrace W,S\rbrace}
+\left(c_{FP,k}(1-D^k)a_k^MY^k
++c_{miss,k}D^k(1-a_k^MY^k)\right)
+\right].
 $$
 
-Investigation decisions use conditional violation probabilities inferred from the monitor's signals and history. A risk-based policy ranks operators by the expected reduction in monitoring loss from an investigation. A randomized audit component supplies observations across the operator population and supports estimation of violation probabilities.
+Here $a_W^M=a_L^M$ and $a_S^M=a_H^M$. The monitor evaluates expected losses conditional on its observations. Its policy determines investigation probabilities as a function of price regime, screening signals, history, and remaining budget. The operator anticipates these probabilities when choosing its actions.
+
+For either violation, the incentive comparison is
+
+$$
+\text{incremental operating gain}
+\quad\text{versus}\quad
+\mathbb E[F\mid\text{violation}]-\mathbb E[F\mid\text{compliance}].
+$$
 
 ### Experimental design
 
-The game uses a committed monitor policy. Operators choose reports and dispatch simultaneously; market operation produces signals; the monitor selects audits and applies sanctions. Operators anticipate the policy's signal-dependent investigation probabilities. Compare fixed enforcement rules first, then optimize parameters within the risk-based policy family.
+The main experiment is a two-period game with one low-price reporting decision and one high-price reserve decision. Compare fixed monitoring policies, then optimize the monitor's allocation between the two periods within the specified policy family. A discrete grid of reports and feasible charging/discharging actions permits direct payoff comparisons and unilateral-deviation calculations.
 
 | Factor | Treatments |
 |---|---|
-| Available violations | Wind underreporting only; SOC violation only; both |
-| Monitor policy | No investigation; random investigation; risk-based investigation |
-| Audit capacity | 0, 1, or 3 operators per hour |
-| Fine level | Zero, moderate, and high type-specific fines |
-| Investigation quality | Perfect and imperfect evidence |
-| Wind-retention allowance | Zero and positive authorized retention |
-| Reserve requirement | Low and high minimum SOC |
-| Operating conditions | Low/high price spreads, low/high wind, binding/nonbinding POI |
+| Operator choices | Truthful and reserve-compliant; false derating only; SOC violation only; both available |
+| Price trajectory | Low/high price pairs with increasing spreads |
+| Initial SOC | Low, intermediate, high |
+| Reserve requirement | Low and high reserve floors |
+| Battery flexibility | Power, energy capacity, and efficiency |
+| Monitoring policy | Random; low-price focused; high-price focused; signal based |
+| Investigation budget | Neither period, one period, both periods |
+| Enforcement | Type-specific wind and SOC fines |
+| Evidence | Perfect investigation, then imperfect investigation |
 
-Use a two-hour low-price/high-price instance to characterize the incentives, followed by the historical 24-hour cases. A discrete reporting and dispatch policy library permits direct payoff and unilateral-deviation calculations in the small instance. Receding-horizon policy rollouts extend the same formulation to the daily experiment. Report the action resolution and measured deviation gains alongside outcomes.
-
-Fine levels are specified in dollars per adverse finding and held fixed across matched comparisons. The main comparisons isolate investigation capacity, policy targeting, evidence quality, and the interaction between the two violation types.
+The 24-hour extension uses historical wind and prices to examine how repeated low- and high-price intervals change charging, reporting, reserve depletion, and the timing of investigations. The operator and monitor remain the two players.
 
 | Outcome | Measurement |
 |---|---|
-| Wind noncompliance | Underreported energy and frequency of false derates |
-| Reserve noncompliance | Deficit magnitude, duration, and timing |
-| Enforcement | Audit allocation, detection rate, false-positive rate, missed violations, and fines |
-| Operator response | Reporting, charging, discharging, and private profit |
+| Low-price response | Reported availability, false-derated energy, charging, and foregone current sales |
+| High-price response | Additional discharge, reserve deficit, and peak-price revenue |
+| Intertemporal response | Energy shifted between price regimes and terminal SOC |
+| Enforcement | Investigation timing, detected violations, false positives, missed violations, and fines |
+| Private value | Operating margin, terminal energy value, and profit after fines |
 | Monitor performance | Investigation cost and total monitoring loss |
-| System operation | Realized operating value, curtailment, congestion, and reserve deficits |
 
-The central hypotheses are that stronger expected enforcement reduces profitable violations, targeted audits use limited capacity more effectively than random audits, and the relative incentives for false derating and reserve depletion depend on the price trajectory and storage capacity.
+The comparisons identify which price conditions make each violation attractive, how enforcement changes the operator's response, and when the monitor allocates its limited effort to wind reporting rather than reserve compliance.
