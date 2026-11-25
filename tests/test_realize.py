@@ -10,7 +10,7 @@ from wargame.solvers.realize import realize
 
 def test_realization_caps_poi_and_conserves_battery_energy() -> None:
     W = np.array([[5, 5, 5, 5, 5, 5], [4, 4, 4, 4, 4, 4]], dtype=float)
-    episode = Episode.from_arrays(W, nameplates=[6, 5], pi_RT=np.ones(6) * 20, K=6, D=np.zeros(6))
+    episode = Episode.from_arrays(W, nameplates=[6, 5], pi_RT=np.ones(6) * 20, K=6)
     c = np.zeros_like(W)
     d = np.zeros_like(W)
     r = np.zeros_like(W)
@@ -34,7 +34,7 @@ def test_realization_caps_poi_and_conserves_battery_energy() -> None:
 
 def test_realization_reduces_discharge_after_wind_is_fully_curtailed() -> None:
     episode = Episode.from_arrays(
-        np.array([[0.0], [0.0]]), nameplates=[4, 4], pi_RT=[50], K=1, D=[0]
+        np.array([[0.0], [0.0]]), nameplates=[4, 4], pi_RT=[50], K=1
     )
     d = np.array([[1.0], [1.0]])
     zeros = np.zeros((2, 1))

@@ -147,9 +147,7 @@ def assess_complete_days(
     price_counts = valid_prices.groupby("_date")["_time_key"].nunique()
     valid_wind = wind[wind["resource"].isin(names)].dropna(subset=["W_avail"])
     wind_counts = valid_wind.groupby(["_date", "resource"])["_time_key"].nunique()
-    valid_forecast = forecast[forecast["resource"].isin(names)].dropna(
-        subset=["What_cop", "b_baseline"]
-    )
+    valid_forecast = forecast[forecast["resource"].isin(names)].dropna(subset=["What_cop"])
     forecast_counts = valid_forecast.groupby(["_date", "resource"])["_time_key"].nunique()
 
     complete: list[pd.Timestamp] = []
@@ -190,9 +188,7 @@ def full_coverage_resources(cfg: Mapping[str, Any]) -> tuple[list[str], list[pd.
     wind = _dated(tables["wind"], tz)
     forecast = _dated(tables["forecast"], tz)
     wind = wind[wind["_date"].isin(valid_dates)].dropna(subset=["W_avail"])
-    forecast = forecast[forecast["_date"].isin(valid_dates)].dropna(
-        subset=["What_cop", "b_baseline"]
-    )
+    forecast = forecast[forecast["_date"].isin(valid_dates)].dropna(subset=["What_cop"])
     expected = horizon * len(valid_dates)
     wind_counts = wind.groupby("resource")["_time_key"].nunique()
     forecast_counts = forecast.groupby("resource")["_time_key"].nunique()

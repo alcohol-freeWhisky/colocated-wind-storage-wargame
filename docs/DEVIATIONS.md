@@ -1,7 +1,22 @@
-# Implementation deviations
+# Model Boundaries and Deviations from ERCOT Practice
 
-- `solvers/realize.py` records a battery-side `spill` diagnostic in the degenerate case where pro-rata POI curtailment exhausts available wind curtailment and an already-full battery cannot retain all of the requested discharge reduction. This preserves both the hard POI limit and SoC bounds; ordinary feasible plans follow the specified wind-first, then reduced-discharge rule and have zero spill.
-- `forecast_error_system.parquet` follows the corrected schema requested in Task A2: forecasts are compared with latest-publication realised HSL and normalized by each region's maximum observed HSL. GEN-based error is retained only as the explicitly curtailment-contaminated comparison. This supersedes the older GEN/hourly-HSL schema in DESIGN.md sections 2 and 5.
+The repository uses ERCOT data but is a stylized operating game.
 
-- 2026-10-21 (lead): base-case `kappa_K` changed 0.9 → 0.6 after the code review showed the POI rarely binds at 0.9 (R3a = R3b, R4a = R4b on most days). 0.9 remains in the sensitivity grid and is documented as the empirically anchored value.
-- 2026-10-21 (solver review fixes): (1) `solvers/game.py` now tests convergence on the undamped best-response residual max|BR_q - q| / sum(N) (`game.tol_rel` 1e-5, `game.max_sweeps` 200) and reports `converged` only if the final deviation gain is also <= `game.max_gain_tol` ($1); `max_delta` is that residual. `GameSolution.objective` now follows the central definition (no lambda_plus term); the old value is `objective_with_plus_penalty`. (2) R4 agents' *private* shortfall penalty is weighted by beta_i (`poi.beta_rule`, capacity share) via `mpc.private_shortfall_beta: game` (default), which matches marginal shortage incentives to R2; `full` restores beta_i = 1 (N times more shortage-averse than R2). (3) The R4a POI budget `max(K - Q_{t-1}, 0) + q_{i,t-1}` can be negative after grid charging; instead of the bare floor `-P_i` (still infeasible when the battery is full), hour 0 of the plan is floored at `-min(P_i, (E_i - soc)/eta_c)` and later planned hours at 0. (4) `poi.kappa_K` base value is 0.6 (designed stress level); 0.9 stays in the sensitivity grid. (5) `04_sensitivity.py` runs only `sensitivity.regimes` (non-forecast regimes) using its own regime loop; `_f` gaps are absent (NaN after concatenation) there. Note: `model/env.py::_minimal_config` still carries the old `game` defaults (50 sweeps, tol 1e-3) for synthetic episodes.
+1. A DAM energy award is a cleared financial/settlement quantity, not a physical
+   minimum-output instruction here. It is retained as `b_dam` but is not mixed
+   with COP HSL or imposed as a constraint.
+2. COP HSL represents an availability plan/forecast. Forecast error is not
+   automatically misconduct or noncompliance.
+3. The shared POI allocation is a designed proportional realization rule, not a
+   claim about ERCOT dispatch of co-located resources.
+4. The 100 $/MWh attempted-overflow charge is a fixed internal strategic rule,
+   not an ERCOT fee, and is excluded from system value.
+5. `PRICE` remains in cell IDs for compatibility with the slide table, but the
+   revised factor is an aggregate injection signal, not a congestion price.
+6. The model is price taking and omits endogenous clearing, ancillary services,
+   unit commitment, outages, losses, and a full two-settlement implementation.
+7. Wind-only battery charging is used because this model has an export POI limit
+   but no corresponding import constraint.
+
+The separate monitor module's `shortfall` is a statistical forecast residual;
+it is not the removed operating-game delivery obligation.

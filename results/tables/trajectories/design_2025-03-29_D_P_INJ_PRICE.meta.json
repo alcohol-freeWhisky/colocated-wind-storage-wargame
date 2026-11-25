@@ -1,0 +1,9 @@
+{
+  "git_hash": "981b613a878a10a8b2aa3271d353374a330e8a06",
+  "created_utc": "2026-11-16T07:27:45.367308+00:00",
+  "config_sha256": "ba3c1f89994ffc31221217f54baf762c7b3bd984c0beb0d278f2f87819d95f02",
+  "runtime_s": 374.20276266604196,
+  "rows": 120,
+  "day": "2025-03-29",
+  "cell": "D_P_INJ_PRICE"
+}

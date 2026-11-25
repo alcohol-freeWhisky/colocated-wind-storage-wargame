@@ -1,110 +1,308 @@
-# Strategic Coordination, Learning, and Monitoring in Co-Located Wind–Storage Systems
+# Shared Wind–Storage Wargame
 
-A Computational Wargame, MIT 6.974, Fall 2026
+This repository compares centralized and decentralized operation of wind–battery resources sharing a point of interconnection (POI). The experiment varies foresight, overflow-charge allocation, and access to other owners' planned injections. It measures their effects on realized operating value, curtailment, battery use, and attempted POI overflow.
 
-Team: Nicolás Acevedo Villena, Subham Saha, Ziqi Wei
+## 1. Experiment
 
-This repository is a reproducible computational testbed for studying how independently controlled wind–storage resources behave when they share one point of interconnection (POI) but not objectives or information. It has three layers. **Part I** (strategic decentralized operation) compares a centralized oracle with decentralized games, limited-information regimes and coordination mechanisms, and measures the strategic and information gaps against real ERCOT wind, price and forecast data. **Part II** (limited information and multi-agent reinforcement learning) asks whether adaptive agents can recover coordination from local or aggregate observations (CTDE vs. DTDE). **Part III** (monitoring, enforcement and resilience) studies how an imperfect market monitor can deter strategic withholding when forecast error hides intent, and how the mechanism survives attacks such as POI derating, biased headroom signals and communication loss. The Workshop 1 scope (Part I plus a preliminary monitor calibration) is implemented; see [Status](#status).
+| Item | Base case |
+|---|---|
+| Resources | Five Anchor Wind units, each modeled as a separate wind–battery owner |
+| Operating window | March 1–April 30, 2025 |
+| Episodes | 60 complete 24-hour days; the daylight-saving transition day is excluded |
+| Resolution | Hourly |
+| Dispatch | Reoptimize over the remaining day and execute the first hour |
+| Cases | 14 cases per day; 840 day–case observations |
+| Prices | Exogenous ERCOT HB_WEST day-ahead and real-time prices |
+| Evaluation | Realized energy revenue less battery discharge degradation |
 
-## Repository structure
+Separate ownership and the shared export limit are experimental assumptions. The model does not reproduce the site's actual ownership, ERCOT dispatch, or market settlement. Each day starts from the same prescribed battery state of charge; storage and information do not carry across days.
 
-```
-config/        base.yaml (all parameters) and scenarios/ (overrides: vortex, horse_hollow)
-code/          Python package `wargame` (code/wargame/) and entry-point scripts (code/scripts/)
-data/raw/      untouched downloads (ERCOT MIS reports, EIA-860); never edited by hand
-data/interim/  per-operating-day extracts (parquet)
-data/processed/ common dataset + forecast-error tables + README.md (provenance)
-results/       tables/ (CSV + .meta.json), figures/ (PNG + PDF), logs/
-docs/          proposal.tex, DESIGN.md, ASSUMPTIONS.md, DEVIATIONS.md, PROGRESS.md,
-               references/, workshop1/report.md
-tests/         offline pytest suite on synthetic episodes
-```
+## 2. Inputs and notation
 
-### `code/wargame/` subpackages
+Time steps have duration $\Delta t=1$ hour. The equations below omit this factor.
 
-| Subpackage | Modules | Role |
+| Symbol | Code field | Definition |
 |---|---|---|
-| `data/` | `ercot`, `eia`, `build_dataset`, `forecast_errors` | Download ERCOT/EIA reports, build the processed dataset and the forecast-error tables |
-| `model/` | `physics`, `env` | Battery dynamics, shared-POI constraints, episode (one operating day, 24 hourly steps) |
-| `solvers/` | `central`, `game`, `agent_lp`, `mpc`, `receding`, `realize` | Central LP (R1), best-response game (R2/R3), per-agent LP, limited-information MPC (R4), receding-horizon (`_f`) variants, physical realisation layer (pro-rata POI curtailment) |
-| `monitor/` | `calibration`, `detection`, `empirical` | Forecast-error noise regimes, detection q0/q1 and ROC, deterrence F* and T* |
-| `experiments/` | `run_episode`, `metrics`, `io`, `plots` | Regime runner, gap/PoA metrics, table I/O with `.meta.json`, figures |
+| $i=1,\ldots,N$ | `primary_agents` | Owner index; $N=5$ |
+| $t=0,\ldots,23$ | `horizon_h` | Hour within an operating day |
+| $W_{it}$ | `W_avail` | Realized available wind, from hourly SCED HSL (MW) |
+| $\widehat W_{it}$ | `What_cop` | Wind availability forecast, from COP HSL (MW) |
+| $\pi_t^{RT}$ | `pi_RT` | Real-time price ($/MWh) |
+| $\pi_t^{DA}$ | `pi_DA` | Day-ahead price ($/MWh) |
+| $b_{it}^{DAM}$ | `b_dam` | Disclosed day-ahead energy award; retained for provenance only |
+| $N_i$ | `nameplate` | Calibrated wind nameplate capacity (MW) |
+| $c_{it},d_{it},r_{it}$ | `c`, `d`, `r` | Planned charging, discharging, and wind curtailment (MW) |
+| $s_{it}$ | `soc` | Battery state of charge (MWh) |
+| $q_{it}$ | planned `q` | Requested net export (MW) |
+| $\widetilde q_{it},\widetilde d_{it}$ | realized `q`, `d` | Executed export and discharge (MW) |
 
-### `code/scripts/` entry points
+SCED HSL is used as available wind, rather than metered generation. DAM awards impose no minimum-delivery obligation. COP HSL supplies the wind forecast; it is not substituted for DAM awards.
 
-| Script | What it does | Writes |
+### Base parameters
+
+| Parameter | Value |
+|---|---|
+| Battery power | $P_i=0.29N_i$ |
+| Battery energy capacity | $E_i=1.5P_i$ |
+| Charge and discharge efficiencies | $\eta_c=\eta_d=0.922$ |
+| Initial SOC | $s_{i0}=0.5E_i$ |
+| Discharge degradation cost | $g_i=10$ $/MWh |
+| Shared export limit | $K=0.6\sum_iN_i$ |
+| Attempted-overflow charge | $\lambda=100$ $/MWh |
+| Activity tie-break cost | $\epsilon=10^{-3}$ $/MWh |
+| Charging source | Wind only |
+
+Battery sizing is calibrated to observed co-located storage. The POI ratio and overflow charge are design parameters. Parameter sources are documented in [ASSUMPTIONS.md](docs/ASSUMPTIONS.md); executable settings are in [base.yaml](config/base.yaml).
+
+## 3. Physical constraints
+
+Owner $i$ chooses charging, discharging, and curtailment subject to
+
+$$
+q_{it}=W_{it}-r_{it}-c_{it}+d_{it},
+$$
+
+$$
+0\le c_{it}\le P_i,\qquad 0\le d_{it}\le P_i,\qquad
+r_{it}\ge0,\qquad c_{it}+r_{it}\le W_{it},
+$$
+
+$$
+s_{i,t+1}=s_{it}+\eta_c c_{it}-\frac{d_{it}}{\eta_d},
+\qquad 0\le s_{it}\le E_i.
+$$
+
+Wind-only charging implies $q_{it}\ge0$. The nominal terminal constraint is $s_{i,24}\ge s_{i0}$. At replanning hour $h$, the target is reduced if the original target cannot be reached using the wind available in the current information view:
+
+$$
+s_i^{target}(h)=\min\left(s_{i0},\ s_{ih}+\eta_c\sum_{t=h}^{23}\min(P_i,W_{it}^{view})\right).
+$$
+
+Both centralized and decentralized cases use this rule. Consequently, restoration of the original initial SOC is not guaranteed in every forecast episode.
+
+The optimization problems use continuous variables. A small activity cost and a cycle-removal transformation address simultaneous charging and discharging; formal runs also check the resulting plans and executed dispatches.
+
+## 4. Decision models
+
+Let $\mathcal T_h=\lbrace h,\ldots,23\rbrace$ denote the remaining operating horizon.
+
+### Centralized dispatch
+
+The planner jointly chooses all owners' dispatches:
+
+$$
+\max\sum_{t\in\mathcal T_h}\sum_i
+\left[\pi_t^{view}q_{it}-g_id_{it}
+-\epsilon(c_{it}+d_{it}+r_{it})\right],
+$$
+
+subject to the physical constraints and a hard POI limit:
+
+$$
+\sum_iq_{it}\le K\qquad\forall t\in\mathcal T_h.
+$$
+
+### Decentralized dispatch
+
+Each owner chooses its own dispatch, taking the available rival-injection signal as given:
+
+$$
+\max U_i=\sum_{t\in\mathcal T_h}
+\left[\pi_t^{view}q_{it}-g_id_{it}
+-\lambda w_{it}V_t
+-\epsilon(c_{it}+d_{it}+r_{it})\right],
+$$
+
+where
+
+$$
+V_t=\left[\sum_jq_{jt}-K\right]_+.
+$$
+
+Owners have no individual POI quota and no hard aggregate export constraint in their planning problems. The charge discourages attempted overflow.
+
+| Allocation | Weight $w_{it}$ |
+|---|---|
+| Equal (`EQ`) | $1/N$ |
+| Injection-based (`INJ`) | $q_{it}^{+}/\sum_jq_{jt}^{+}$; equal fallback when the denominator is zero |
+
+For either allocation, the charges evaluated at a common profile sum to $\lambda V_t$. The injection-based best response accounts for the dependence of the owner's share on its own decision. The code calls this rule “causal”; its precise definition is the positive-injection share above.
+
+Owner objectives use **planned** energy revenue. They do not incorporate the physical export-reduction map below into their revenue calculation. The experiment therefore evaluates this planning incentive together with the specified realization rule.
+
+## 5. Physical realization
+
+The realization layer checks battery bounds and enforces the shared export limit. If total requested export $Q_t$ exceeds $K$, each owner's assigned reduction is
+
+$$
+\Delta q_{it}=(Q_t-K)\frac{q_{it}^{+}}{\sum_jq_{jt}^{+}}.
+$$
+
+With nonnegative injections, this gives proportional export acceptance:
+
+$$
+\widetilde q_{it}=q_{it}\min\lbrace 1,K/Q_t\rbrace\qquad(Q_t>0).
+$$
+
+Within each owner's assigned reduction, the implementation proceeds as follows:
+
+| Order | Adjustment |
+|---|---|
+| 1 | Increase wind curtailment |
+| 2 | Reduce battery discharge, retaining the unexecuted energy subject to battery headroom |
+| 3 | Record any remaining reduction as inverter-side dissipation (`spill`) |
+
+Wind export and battery discharge are not independently scaled by a common factor. The next optimization starts from the executed SOC.
+
+## 6. Experimental design
+
+| Factor | Levels | Comparison |
 |---|---|---|
-| `01_download_raw.py` | Download ERCOT prices, 60-day SCED/DAM/COP disclosures, wind-forecast reports, EIA-860 (resumable) | `data/raw/`, `data/interim/`, `results/logs/` |
-| `02_build_dataset.py` | Build the common dataset from cached raw/interim data | `data/processed/` |
-| `03_run_regimes.py` | Run R1..R4b (10 regimes) on every complete day, base case Anchor Wind | `results/tables/regimes_by_day.csv`, `regimes_summary.csv`, `matrix_summary*.csv`, `illustrative_days.csv`, `regimes_skipped_days.csv` |
-| `03b_trajectories.py` | Hourly dispatch trajectories for chosen days (`--days ...`), identical to the 03 run | `results/tables/trajectories/` |
-| `04_sensitivity.py` | Grid: POI tightness x wind correlation set x storage design | `results/tables/sensitivity*.csv`, `agent_sets.csv`, `sensitivity_failures.csv` |
-| `05_monitor.py` | Noise regimes, ROC, required fine F*, correction duration T* | `results/tables/monitor_regimes.csv`, `monitor_roc.csv`, `monitor_deterrence.csv` |
-| `06_make_report.py` | Figures and the Workshop 1 report | `results/figures/`, `docs/workshop1/report.md` and `.html` |
+| Control | `C`, `D` | Joint planner versus independent owners |
+| Foresight | `P`, `F` | Realized future inputs versus forecast future inputs |
+| Charge allocation | `INJ`, `EQ` | Injection-based versus equal shares |
+| Rival information | `FULL`, `PRICE`, `NONE` | Owner plans, aggregate signal, or zero-rival assumption |
 
-## Setup (macOS / Linux)
+The 14 cases are
 
-Requires Python >= 3.11 (developed on 3.13).
+$$
+\lbrace C_P,C_F\rbrace \cup
+\lbrace D_{f,a,m}:f\in\lbrace P,F\rbrace,\ a\in\lbrace INJ,EQ\rbrace,\ m\in\lbrace FULL,PRICE,NONE\rbrace\rbrace.
+$$
+
+Allocation and rival-information levels apply only to decentralized cases.
+
+### Foresight
+
+| Level | Current hour | Remaining future hours |
+|---|---|---|
+| Perfect (`P`) | Realized wind and RT price | Realized wind and RT price |
+| Forecast (`F`) | Realized wind and RT price | COP wind and DA price |
+
+Forecast cases assume knowledge of current-hour wind and RT price. DA price is a proxy for future RT price, rather than a separate settlement leg. COP forecasts are read from the input data; the simulation does not train a forecasting model.
+
+### Rival information
+
+| Level | Inputs to the best-response problem |
+|---|---|
+| `FULL` | Rival plans reduced to aggregate net injection and aggregate positive injection |
+| `PRICE` | The same two aggregate quantities, without owner-level identities |
+| `NONE` | Both rival quantities set to zero |
+
+`PRICE` is a historical case identifier for **aggregate information**, not a congestion price. FULL and PRICE use the same update algorithm and the same sufficient aggregate inputs. Their equality in this implementation follows from the aggregative payoff structure.
+
+NONE represents a zero-rival planning assumption. It is not a Bayesian game with unknown capacities.
+
+## 7. Solution and acceptance criteria
+
+At each hour, the simulation constructs the remaining-horizon information view, solves the planning problem, executes the first hour, and updates SOC.
+
+| Setting | Value or method |
+|---|---|
+| Centralized problem | Joint continuous optimization |
+| Equal-share best response | Continuous linear optimization |
+| Injection-based best response | Convex formulation solved with Clarabel |
+| Informed owner updates | Sequential best responses; signal refreshed after each owner update |
+| Damping | 0.5 |
+| Maximum sweeps | 200 per remaining-horizon game |
+| NONE updates | One independent solve per owner |
+| Acceptance threshold | Maximum unilateral payoff gain at most $1 |
+
+For FULL and PRICE, the numerical equilibrium check is
+
+$$
+\max_i\left[\max_{a_i'}U_i(a_i',a_{-i})-U_i(a_i,a_{-i})\right]\le1\text{ dollar}.
+$$
+
+This checks an approximate equilibrium of the remaining-horizon **planning** game under the current information view. It does not establish an equilibrium of the full stochastic dynamic game.
+
+For NONE, deviation gains are also evaluated against zero rival injection. Its convergence flag certifies the individual perceived problems, not a Nash equilibrium of the actual joint profile. Best-response iteration involves no statistical learning or belief updates.
+
+Formal runs reject failed convergence checks, realized POI overflow, and simultaneous charging/discharging in planned or realized operation. Dispatch residuals are retained as diagnostics; acceptance is based on payoff gains.
+
+## 8. Evaluation and completed run
+
+All cases use the same realized system-value metric:
+
+$$
+J=\sum_{t,i}\left[\pi_t^{RT}\widetilde q_{it}-g_i\widetilde d_{it}\right].
+$$
+
+Overflow charges are internal incentives and are reported separately. Neither those charges nor the numerical activity cost is deducted from $J$.
+
+### Mean daily system value ($/day, rounded)
+
+| Foresight | Planner | INJ full | INJ aggregate | INJ none | EQ full | EQ aggregate | EQ none |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| P | 61,951 | 61,801 | 61,801 | 60,015 | 61,358 | 61,358 | 60,015 |
+| F | 58,524 | 58,177 | 58,177 | 56,244 | 57,541 | 57,541 | 56,247 |
+
+### Selected matched contrasts
+
+| Contrast | Interpretation | Mean difference ($/day) |
+|---|---|---:|
+| $C_P-D_{P,INJ,FULL}$ | Centralized versus decentralized control | 149.47 |
+| $C_P-C_F$ | Foresight under centralized control | 3,426.98 |
+| $D_{F,INJ,FULL}-D_{F,EQ,FULL}$ | Charge allocation under forecast inputs | 635.42 |
+| $D_{F,INJ,FULL}-D_{F,INJ,NONE}$ | Rival signal under forecast inputs | 1,932.53 |
+| FULL minus aggregate | Owner identities beyond aggregate inputs | 0 |
+
+The recorded run was generated on November 16, 2026. It contains 60 days and 840 day–case observations, with no failed days. The reported owner convergence-hour fractions are all 1, subject to the interpretation in Section 7. Realized export and simultaneous-operation checks passed. Full results are in the [Workshop 1 report](docs/workshop1/report.md).
+
+Metadata sidecars record creation time, runtime, configuration hash, and the Git HEAD at execution. The recorded HEAD, `981b613`, predates the commit of the revised implementation; that field alone does not identify the uncommitted source used to generate the results.
+
+## 9. Scope
+
+| Component | Status |
+|---|---|
+| Wind–battery dispatch, SOC, hourly prices and wind forecasts | Included in the operating experiment |
+| Shared physical export constraint and overflow-charge allocation | Included |
+| Full, aggregate, and zero-rival information cases | Included |
+| Detection probabilities, false positives, deterrence fines and sanction duration | Separate monitoring module; no feedback into operating decisions |
+| Hidden capacity, strategic capacity reports, report-based allocation | Not implemented |
+| Inspection probabilities updated from violation history | Not implemented in the operating experiment |
+| Bayesian learning, Q-learning, or learning rival types | Not implemented |
+| Demand-based interpretation of $K$ or endogenous market clearing | Not implemented; $K$ is an export limit |
+| Minimum-generation obligation or delivery-shortfall penalty | Absent from the operating model |
+
+The monitor's `shortfall` denotes a statistical forecast residual, not proof of misconduct. Its discount and delay parameters belong to separate deterrence calculations. Results from the operating experiment do not validate a capacity-misreporting model or its propositions.
+
+## 10. Repository map
+
+| Component | Source |
+|---|---|
+| Dataset construction | [`build_dataset.py`](code/wargame/data/build_dataset.py) |
+| Centralized solver | [`central.py`](code/wargame/solvers/central.py) |
+| Owner objective and constraints | [`agent_lp.py`](code/wargame/solvers/agent_lp.py) |
+| Best responses, charge shares, deviation checks | [`game.py`](code/wargame/solvers/game.py) |
+| Information views, terminal targets, centralized receding horizon | [`receding.py`](code/wargame/solvers/receding.py) |
+| Decentralized receding horizon and case definitions | [`design_matrix.py`](code/wargame/solvers/design_matrix.py) |
+| Physical realization | [`realize.py`](code/wargame/solvers/realize.py) |
+| Experiment entry point | [`07_design_matrix.py`](code/scripts/07_design_matrix.py) |
+| Monitoring entry point | [`05_monitor.py`](code/scripts/05_monitor.py) |
+
+| Output | Location |
+|---|---|
+| Daily results | `results/tables/design_matrix_by_day.csv` |
+| Summary, pivot, and matched contrasts | `results/tables/design_matrix_{summary,pivot,effects}.csv` |
+| Representative trajectories | `results/tables/trajectories/`; current representative day: March 29, 2025 |
+| Figures | `results/figures/fig_design_*.{png,pdf}` |
+| Report | `docs/workshop1/report.{md,html}` |
+| Metadata | Corresponding `.meta.json` sidecars |
+
+## 11. Reproduction
+
+Run from the repository root:
 
 ```bash
-git clone https://github.com/alcohol-freeWhisky/colocated-wind-storage-wargame.git
-cd colocated-wind-storage-wargame
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt     # loose dependency list
-pip install -e code/                # installs the `wargame` package
-pytest tests/ -q
+python -m venv .venv
+.venv/bin/pip install -r requirements.txt
+PYTHONPATH=code .venv/bin/python code/scripts/02_build_dataset.py --config config/base.yaml
+PYTHONPATH=code .venv/bin/python code/scripts/07_design_matrix.py --config config/base.yaml --workers 4
+PYTHONPATH=code .venv/bin/python code/scripts/06_make_report.py --config config/base.yaml
+PYTHONPATH=code .venv/bin/python -m pytest -q
 ```
 
-`requirements.lock.txt` contains the exact pinned versions used for the committed results; use `pip install -r requirements.lock.txt` for bit-for-bit reproduction.
+Dataset construction requires local raw inputs; the download entry point is `code/scripts/01_download_raw.py`. Report generation reads existing artifacts without rerunning the experiment. Monitoring is run separately through `05_monitor.py`.
 
-## Reproduce Workshop 1
-
-Run from the repository root, in order:
-
-```bash
-python code/scripts/01_download_raw.py  --config config/base.yaml   # ~45 min for 61 days
-python code/scripts/02_build_dataset.py --config config/base.yaml   # ~1 min
-python code/scripts/03_run_regimes.py   --config config/base.yaml   # ~7 min
-python code/scripts/04_sensitivity.py   --config config/base.yaml   # ~16 min
-python code/scripts/05_monitor.py       --config config/base.yaml   # < 1 min
-python code/scripts/06_make_report.py   --config config/base.yaml   # < 1 min
-```
-
-`data/processed/` and `results/` are committed, so collaborators can start at step 03 (re-run the regimes) or step 06 (rebuild the report) without downloading anything. Step 01 is only needed to extend the window or refresh the wind-forecast snapshot.
-
-## Data and provenance
-
-- **Observed**: HB_WEST DA/RT prices, SCED available wind (HSL), COP forecasts, DAM awards, resource metadata, EIA-860 assets, and the observed co-located BESS at Anchor Wind.
-- **Calibrated**: nameplates, battery power ratio/duration/efficiency/degradation cost, monitor noise regimes, correlation sets chosen from real series.
-- **Designed** (wargame variables): POI limit K, minimum delivery D, penalties, information structures, monitor thresholds and enforcement parameters.
-
-The full parameter-by-parameter record is in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md); the schema of each processed file is in [data/processed/README.md](data/processed/README.md).
-
-Note: ERCOT keeps the hourly wind-forecast reports (NP4-732-CD / NP4-742-CD) on MIS for only about 8 days. The system-level snapshot used here (publications 2026-10-13 to 2026-10-20) is committed under `data/raw/ercot/wind_forecast_*`. Re-running step 01 adds newer publications without deleting the snapshot.
-
-## Status
-
-Workshop 1 deliverables are complete; Parts II and III beyond the preliminary monitor calibration are not started. See [docs/PROGRESS.md](docs/PROGRESS.md) for the dated status, decisions and next steps, and [docs/workshop1/report.md](docs/workshop1/report.md) for the results.
-
-## Conventions for collaborators
-
-- English only in code, comments, docs and commit messages.
-- Experiments are config-driven: parameters live in `config/base.yaml`; variants go in `config/scenarios/`. No magic numbers in code.
-- Never edit `data/raw/` by hand.
-- Every results table gets a `.meta.json` (written through `experiments/io.py`).
-- Record any departure from `docs/DESIGN.md` in `docs/DEVIATIONS.md` (dated, with reason).
-- Add tests under `tests/`; they must run offline on synthetic data (`pytest tests/ -q`).
-- Branches: `part2/<topic>`, `part3/<topic>`; every PR is reviewed by one other team member before merging.
-- Update `docs/PROGRESS.md` when a milestone changes status.
-
-## Data sources
-
-Full references (R1–R14) are in [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md#references).
-
-- R1: ERCOT DAM/RTM hub prices, NP4-180-ER and NP6-785-ER (via `gridstatus`).
-- R2: ERCOT 60-Day SCED (NP3-965-ER), DAM (NP3-966-ER) and COP Adjustment Period disclosures.
-- R3: ERCOT wind production and forecasts, NP4-732-CD and NP4-742-CD.
-- R4: U.S. EIA, Form EIA-860 (2023 release).
-- R6: LBNL, *Hybrid Power Plants: Status of Operating and Proposed Plants, 2025 Data Update* (copy in `docs/references/`).
-- R7: NREL Annual Technology Baseline, utility-scale battery storage.
-- R8–R13: Battery degradation, CAISO hybrid resources, ERCOT Protocols and VOLL references.
+Further documentation: [implementation contract](docs/DESIGN.md), [model assumptions](docs/ASSUMPTIONS.md), [deviations from ERCOT practice](docs/DEVIATIONS.md), and [release checklist](docs/PROGRESS.md).
