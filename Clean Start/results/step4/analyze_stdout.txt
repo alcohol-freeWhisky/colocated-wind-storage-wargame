@@ -1,0 +1,17 @@
+analyzed T1 R/S0 daily; invariance_max=0.00e+00
+analyzed T2 R/S1 f=5l daily; invariance_max=0.00e+00
+analyzed T5 C/S1 f=3l daily; invariance_max=0.00e+00
+analyzed T3 R/S2 daily; invariance_max=0.00e+00
+analyzed T6 C/S2 daily; invariance_max=0.00e+00
+analyzed T3c R/S2c daily; invariance_max=0.00e+00
+analyzed T6c C/S2c daily; invariance_max=0.00e+00
+analyzed T6 C/S2 VariantI daily; invariance_max=0.00e+00
+analyzed T1 R/S0 bin; invariance_max=0.00e+00
+analyzed T2 R/S1 f=5l bin; invariance_max=0.00e+00
+analyzed T5 C/S1 f=3l bin; invariance_max=0.00e+00
+analyzed T3 R/S2 bin; invariance_max=0.00e+00
+analyzed T6 C/S2 bin; invariance_max=0.00e+00
+analyzed T3c R/S2c bin; invariance_max=0.00e+00
+analyzed T6c C/S2c bin; invariance_max=0.00e+00
+analyzed T6 C/S2 VariantI bin; invariance_max=0.00e+00
+written
