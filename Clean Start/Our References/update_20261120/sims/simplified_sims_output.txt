@@ -1,0 +1,109 @@
+
+=== Example A check ===
+C [(47.5, 47.5), (95.0, 20.0)]
+S [(20.0, 95.0), (10.0, 10.0)]
+
+=== Example B ===
+owner2 reports  4.0: x1=6.00 x2=3.00 unused=0.00
+owner2 reports  6.4: x1=5.00 x2=4.00 unused=0.00
+owner2 reports  8.0: x1=4.50 x2=4.00 unused=0.50
+owner2 reports 10.0: x1=4.00 x2=4.00 unused=1.00
+marginal gain at truth = $50 per MW over-reported
+NE count=21; l1 in [10.0,10.0], l2 in [8.0,10.0]
+NE x1 range [4.50,5.00], x2 range [4.00,4.00], unused range [0.00,0.50]
+truthful (8,4) is NE: False
+[data] checker estimate (COP) missing cells: 0; error std = 0.162 x nameplate
+
+=== Real data: Anchor Wind, 1440 h (60 full days), K = 157.0 MW ===
+hours with total available wind > K: 49%
+battery=False  truthful :   2759.6 MWh/day   lost vs truthful:    0.0 MWh/day ( 0.0%)
+battery=False  fixed    :   2737.3 MWh/day   lost vs truthful:   22.3 MWh/day ( 0.8%)
+battery=False  feedback :   2744.6 MWh/day   lost vs truthful:   15.0 MWh/day ( 0.5%)
+battery=True   truthful :   2827.4 MWh/day   lost vs truthful:    0.0 MWh/day ( 0.0%)
+battery=True   fixed    :   2806.7 MWh/day   lost vs truthful:   20.8 MWh/day ( 0.7%)
+battery=True   feedback :   2813.3 MWh/day   lost vs truthful:   14.1 MWh/day ( 0.5%)
+
+-- one owner over-reports to its installed capacity in every hour; others truthful --
+W1 (16 MW) : liar +  17.2 MWh/day (+11.3%), others   -30.5, wasted  13.3
+W2 (99 MW) : liar +  44.7 MWh/day (+3.9%), others   -82.0, wasted  37.3
+W3 (89 MW) : liar +  69.2 MWh/day (+8.0%), others  -140.8, wasted  71.6
+W4 (39 MW) : liar +  18.9 MWh/day (+4.4%), others   -37.6, wasted  18.7
+W5 (19 MW) : liar +  20.4 MWh/day (+11.7%), others   -40.1, wasted  19.7
+
+-- everybody reports installed capacity (= fixed shares) vs truthful, per unit --
+W1 (16 MW) :    +5.3 MWh/day (+3.5%)
+W2 (99 MW) :   -45.1 MWh/day (-4.0%)
+W3 (89 MW) :   +28.6 MWh/day (+3.3%)
+W4 (39 MW) :   -19.6 MWh/day (-4.6%)
+W5 (19 MW) :    +8.5 MWh/day (+4.9%)
+
+=== Stress: gain from lying and needed inspection probability vs K ===
+kappa=0.40: best % gain by unit [19.5  8.  14.4 10.6 20.7]; needed inspection prob (fine=3) [0.16 0.1  0.11 0.15 0.15]
+kappa=0.45: best % gain by unit [16.9  6.7 12.3  8.5 17.9]; needed inspection prob (fine=3) [0.17 0.11 0.12 0.16 0.17]
+kappa=0.50: best % gain by unit [14.7  5.6 10.7  6.9 15.5]; needed inspection prob (fine=3) [0.19 0.11 0.13 0.17 0.18]
+kappa=0.55: best % gain by unit [12.9  4.7  9.3  5.5 13.4]; needed inspection prob (fine=3) [0.19 0.11 0.14 0.17 0.2 ]
+kappa=0.60: best % gain by unit [11.3  3.9  8.   4.4 11.7]; needed inspection prob (fine=3) [0.2  0.11 0.15 0.17 0.21]
+kappa=0.65: best % gain by unit [ 9.8  3.3  6.9  3.5 10. ]; needed inspection prob (fine=3) [0.2  0.11 0.15 0.15 0.21]
+kappa=0.70: best % gain by unit [8.2 2.8 5.9 2.7 8.4]; needed inspection prob (fine=3) [0.19 0.1  0.14 0.14 0.21]
+kappa=0.75: best % gain by unit [6.5 2.3 4.8 1.9 6.7]; needed inspection prob (fine=3) [0.18 0.1  0.14 0.12 0.2 ]
+kappa=0.80: best % gain by unit [4.6 1.8 3.6 1.3 4.8]; needed inspection prob (fine=3) [0.16 0.08 0.13 0.09 0.18]
+kappa=0.85: best % gain by unit [2.5 1.2 2.1 0.7 2.7]; needed inspection prob (fine=3) [0.12 0.06 0.09 0.06 0.13]
+kappa=0.90: best % gain by unit [0.8 0.5 0.7 0.3 0.9]; needed inspection prob (fine=3) [0.04 0.03 0.04 0.02 0.05]
+kappa=0.95: best % gain by unit [0.1 0.1 0.1 0.  0.1]; needed inspection prob (fine=3) [0. 0. 0. 0. 0.]
+kappa=1.00: best % gain by unit [0. 0. 0. 0. 0.]; needed inspection prob (fine=3) [0. 0. 0. 0. 0.]
+
+=== Pure Nash equilibria, 5 owners x 5 report options, 60 real days ===
+No checks         : 1 pure NE
+   cap, cap, cap, cap, cap | over-report 78.7% of available | energy 2737 MWh/day (truthful: 2760)
+Random, fine 1x   : 1 pure NE
+   cap when windy, cap when windy, cap when windy, cap when windy, cap when windy | over-report 18.6% of available | energy 2733 MWh/day (truthful: 2760)
+Random, fine 5x   : 1 pure NE
+   truth, truth, truth, truth, truth | over-report 0.0% of available | energy 2760 MWh/day (truthful: 2760)
+Targeted, fine 1x : 2 pure NE
+   truth, truth, truth, truth, truth | over-report 0.0% of available | energy 2760 MWh/day (truthful: 2760)
+   x1.25, truth, x1.25, x1.25, x1.25 | over-report 10.1% of available | energy 2751 MWh/day (truthful: 2760)
+Unused-share charge 1x (meter only): 1 pure NE
+   cap when windy, truth, cap when windy, cap when windy, cap when windy | over-report 11.3% of available | energy 2723 MWh/day (truthful: 2760)
+
+=== Learning (EXP3, 50000 days, 6 seeds, 1 inspection/day) ===
+No checks                         : over-report first 200 d  40.2%
+No checks                         : over-report (last 5000 d)  70.7% of available, truthful share 1%, P(lie caught) 0%
+   final mixed strategy per owner (truth, x1.25, x1.5, cap, cap-when-windy):
+   W1 (16 MW)  0.01 0.01 0.38 0.47 0.12
+   W2 (99 MW)  0.01 0.11 0.47 0.25 0.15
+   W3 (89 MW)  0.01 0.04 0.24 0.47 0.24
+   W4 (39 MW)  0.01 0.06 0.44 0.42 0.06
+   W5 (19 MW)  0.01 0.01 0.43 0.52 0.02
+Random checks, small fine (1x)    : over-report first 200 d  39.7%
+Random checks, small fine (1x)    : over-report (last 5000 d)  22.0% of available, truthful share 12%, P(lie caught) 20%
+   final mixed strategy per owner (truth, x1.25, x1.5, cap, cap-when-windy):
+   W1 (16 MW)  0.09 0.40 0.27 0.01 0.22
+   W2 (99 MW)  0.19 0.40 0.25 0.02 0.14
+   W3 (89 MW)  0.18 0.17 0.45 0.01 0.19
+   W4 (39 MW)  0.22 0.15 0.32 0.01 0.29
+   W5 (19 MW)  0.02 0.23 0.17 0.01 0.58
+Random checks, large fine (5x)    : over-report first 200 d  39.2%
+Random checks, large fine (5x)    : over-report (last 5000 d)  10.2% of available, truthful share 60%, P(lie caught) 20%
+   final mixed strategy per owner (truth, x1.25, x1.5, cap, cap-when-windy):
+   W1 (16 MW)  0.71 0.18 0.03 0.01 0.07
+   W2 (99 MW)  0.67 0.24 0.05 0.01 0.02
+   W3 (89 MW)  0.56 0.27 0.13 0.01 0.03
+   W4 (39 MW)  0.64 0.21 0.07 0.01 0.06
+   W5 (19 MW)  0.53 0.04 0.12 0.01 0.29
+Targeted checks, small fine (1x)  : over-report first 200 d  34.8%
+Targeted checks, small fine (1x)  : over-report (last 5000 d)  14.4% of available, truthful share 22%, P(lie caught) 26%
+   final mixed strategy per owner (truth, x1.25, x1.5, cap, cap-when-windy):
+   W1 (16 MW)  0.10 0.76 0.02 0.01 0.11
+   W2 (99 MW)  0.50 0.38 0.01 0.01 0.09
+   W3 (89 MW)  0.13 0.71 0.01 0.01 0.13
+   W4 (39 MW)  0.21 0.47 0.02 0.01 0.29
+   W5 (19 MW)  0.21 0.68 0.01 0.01 0.08
+
+=== Does the value of honest reports depend on how similar the owners' wind is? ===
+[data] checker estimate (COP) missing cells: 0; error std = 0.162 x nameplate
+Anchor (5 units, same site)    mean corr 0.94: everyone-lies/fixed loses  0.8%, meter feedback loses  0.5%
+low correlation set            mean corr 0.55: everyone-lies/fixed loses  2.7%, meter feedback loses  1.4%
+medium correlation set         mean corr 0.75: everyone-lies/fixed loses  3.0%, meter feedback loses  1.7%
+high correlation set           mean corr 0.95: everyone-lies/fixed loses  0.4%, meter feedback loses  0.3%
+
+Figures written to /Users/nacevedo/Documents/Github/colocated-wind-storage-wargame/Clean Start/Our References/update_20261120/figures
