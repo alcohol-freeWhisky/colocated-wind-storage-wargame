@@ -1,0 +1,16 @@
+learning:
+  train_days: 30
+  validation_days: 10
+  test_days: 20
+  price_quantiles: [0, 0.25, 0.5, 0.75, 1]
+  beta_grid: [0, 0.5, 1, 1.5]
+  ridge_grid: [0.0001, 0.01, 1, 100]
+  minimum_samples: 24
+  price_scale: 100
+  initial_rival_fraction: 0.5
+  age_cap: 168
+  bootstrap_samples: 1000
+  treatments: [ZERO, PERSIST, FIT, ORACLE]
+  output: results/learning
+poi:
+  lambda_plus: 0

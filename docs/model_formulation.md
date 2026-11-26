@@ -894,3 +894,37 @@ The repository's separate forecast-residual monitor uses threshold grids, withho
 | Proposed reserve extension | (51)–(71), one selected farm and full-record enforcement |
 
 The original 14-case outputs remain the baseline. New outputs should identify the objective, predictor, farm set, foresight view, connection limit, reserve commitment, and enforcement parameter so that each comparison changes only its named treatment.
+
+## 10. First implemented learning experiment
+
+`code/scripts/08_learning_experiment.py` implements the deterministic ZERO,
+PERSIST, FIT and conditional ORACLE comparisons in Section 6. The five farms
+rotate as focal operator against four fixed reference policies. The 30/10/20
+chronological split, actual accepted-export objective, zero overflow charge,
+censored forecast training and common threshold-policy class are used.
+
+The threshold actions in (45)–(46) receive a common terminal-viability projection:
+
+$$
+L_{it}=\left[s_{i0}-\eta_c\Delta t\sum_{u=t+1}^{T-1}\min(P_i,W_{iu})\right]_+,
+$$
+
+$$
+c_{it}\leftarrow\max\left(c_{it},\frac{[L_{it}-s_{it}]_+}{\eta_c\Delta t}\right),
+\qquad
+d_{it}\leftarrow\begin{cases}
+0,&c_{it}>0,\\
+\min(d_{it},\eta_d[s_{it}-L_{it}]_+/\Delta t),&c_{it}=0.
+\end{cases}
+$$
+
+Charging is bounded by available wind, power, and battery headroom. The actual
+SOC is at least the planned next SOC after a proportional cut cancels discharge,
+so this projection preserves the daily return target during execution. It is
+applied to reference opponents and all forecasting treatments.
+
+The first experiment uses deterministic forecasts, frozen training coefficients,
+and treatment-specific observable test histories. Scenario sampling, online
+coefficient refitting, and simultaneous adaptation of all five controllers are
+subsequent comparisons. Results and forecast errors at every lead are in
+[`results/learning/report.md`](../results/learning/report.md).

@@ -306,3 +306,17 @@ PYTHONPATH=code .venv/bin/python -m pytest -q
 Dataset construction requires local raw inputs; the download entry point is `code/scripts/01_download_raw.py`. Report generation reads existing artifacts without rerunning the experiment. Monitoring is run separately through `05_monitor.py`.
 
 Further documentation: [implementation contract](docs/DESIGN.md), [model assumptions](docs/ASSUMPTIONS.md), [deviations from ERCOT practice](docs/DEVIATIONS.md), and [release checklist](docs/PROGRESS.md).
+
+## Opponent forecasting experiment
+
+The first learning extension compares zero-rival, persistence, fitted aggregate
+forecasts, and an ideal-information controller. Five farms rotate as focal owner
+against four fixed opponents. It uses actual accepted-export revenue and no
+additional overflow charge, with 30 training, 10 validation and 20 test days.
+
+```bash
+PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/scripts/08_learning_experiment.py --workers 4
+```
+
+See the [unified formulation](docs/model_formulation.md) and
+[simulation results](results/learning/report.md).
