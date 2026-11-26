@@ -1,0 +1,17 @@
+rl:
+  seeds: [6974, 6975, 6976]
+  episodes: 600
+  validation_interval: 100
+  hidden: 48
+  batch_size: 64
+  replay_capacity: 20000
+  learning_rate: 0.001
+  discount: 1.0
+  target_interval: 100
+  warmup: 256
+  updates_per_hour: 1
+  epsilon_start: 0.8
+  epsilon_end: 0.05
+  dp_soc_points: 81
+  actions: [-1, -0.75, -0.5, -0.25, 0, 0.25, 0.5, 0.75, 1]
+  output: results/learning_rl

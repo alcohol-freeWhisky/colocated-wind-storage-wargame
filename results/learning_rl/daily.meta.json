@@ -1,0 +1,22 @@
+{
+  "git_hash": "ef18d2ecae0312a8e68173fea8f40dbf672eb6b2",
+  "created_utc": "2026-11-26T10:22:04.765778+00:00",
+  "config_sha256": "130e24a5e7f525b61c338e266adf6e12792c480a5d572b37baec2a232b429619",
+  "runtime_s": 103.13719287497224,
+  "rows": 180,
+  "source_sha256": {
+    "code/wargame/learning/control.py": "bc422226f07856ad1861baef4edd601df9f06ab2a3aa3336a8db4a9842242cfe",
+    "code/wargame/learning/__init__.py": "c65cc3a6d3b63d5b75f59df4a7b737a72c7b8aa81e63fc0446c2464293b56ba3",
+    "code/wargame/learning/soc_filter.py": "e07b9496d5f10949a6faa0056bd58de0d1ed6626b0b1f7eebc1007d9642cd343",
+    "code/wargame/learning/experiment.py": "74b571e90d6b0b60511d1dab20e977169ad7ef1dbcc8b5a06733c0c3cbd85015",
+    "code/wargame/learning/simultaneous.py": "26c2616fe99b4ee85b97de0a05c055a097ce995b2d1ba0a1a216747366335f59",
+    "code/wargame/learning/study.py": "95fbf92e85484cb2700103047a26fd1f0fb1b7f2cfe6a945f35f41f0a1a253c2",
+    "/Users/ziqiwei/6.974_wargame/code/scripts/11_rl_dispatch.py": "8974010f3b3387a6b032ba5614e8d020db4e21e6ee54c77e45d0b042ce7505a4"
+  },
+  "evaluation_status": "retrospective; April 11\u201330 reused in prior studies",
+  "training": "March complete days only",
+  "validation": "April 1\u201310",
+  "evaluation": "April 11\u201330",
+  "objective": "individual accepted-export operating margin; no overflow charge",
+  "failed_days": 0
+}

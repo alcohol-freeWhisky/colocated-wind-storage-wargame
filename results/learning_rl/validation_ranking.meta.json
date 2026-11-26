@@ -1,0 +1,13 @@
+{
+  "git_hash": "ef18d2ecae0312a8e68173fea8f40dbf672eb6b2",
+  "created_utc": "2026-11-26T10:23:22.597858+00:00",
+  "config_sha256": "130e24a5e7f525b61c338e266adf6e12792c480a5d572b37baec2a232b429619",
+  "runtime_s": 4.476269375008997,
+  "rows": 5,
+  "source_sha256": {
+    "/Users/ziqiwei/6.974_wargame/code/scripts/12_validate_dispatch.py": "aef52dae3693d2109e92943c1cd9a8c4102fd2bdca523bc33aa036dead6664b5"
+  },
+  "selection_data": "April 1\u201310 only",
+  "evaluation_status": "April 11\u201330 retrospective",
+  "selected_algorithm": "DP_PERSIST"
+}

@@ -1046,3 +1046,105 @@ prediction RMSE from seed-level errors before averaging.
 See [`learning_soc/report.md`](../results/learning_soc/report.md). This experiment
 estimates hidden rival storage states; the separate reserve-compliance model in
 Section 7 is unchanged.
+
+## 13. Direct battery control and reinforcement learning
+
+`11_rl_dispatch.py` compares direct battery dynamic programming with independent
+Double DQN. Both use signed battery commands
+
+$$
+a_{it}^{bat}\in\mathcal U=\lbrace-1,-0.75,-0.5,-0.25,0,0.25,0.5,0.75,1\rbrace.
+$$
+
+Battery commands are named `command` in the implementation.
+A positive command discharges; a negative command charges. Before projection,
+
+$$
+c_{it}=\min\left([-a_{it}^{bat}]_+P_i,W_{it},\frac{E_i-s_{it}}{\eta_c\Delta t}\right),
+\qquad d_{it}=[a_{it}^{bat}]_+P_i.
+$$
+
+Apply the terminal-viability projection in Section 10 and physical bounds.
+Wind curtailment before the POI controller is
+
+$$
+r_{it}=\begin{cases}W_{it}-c_{it},&\pi_t<0,\\0,&\pi_t\ge0.\end{cases}
+$$
+
+All owners choose before joint realization. No extra overflow fee is charged.
+
+### Dynamic-programming control
+
+For an owner-specific rival forecast, write $\mathcal R_i$ for the own executed
+export, discharge and next SOC under the common POI rule. With 81 equally spaced
+SOC grid points, backward recursion is
+
+$$
+V_{i,t}(s)=\max_{a\in\mathcal U}\Big(
+\left[\pi_t\widetilde q_{it}-c_i^{deg}\widetilde d_{it}
+-\epsilon^{act}(c_{it}+d_{it}+r_{it})\right]\Delta t
++V_{i,t+1}(s')\Big),
+$$
+
+$$
+(\widetilde q_{it},\widetilde d_{it},s')=
+\mathcal R_i(s,a,W_{it},\widehat Q_{-i,t\mid h}),
+\qquad
+V_{iT}(s)=\begin{cases}0,&s\ge s_{i0},\\-\infty,&s<s_{i0}.\end{cases}
+$$
+
+Use linear interpolation between SOC grid values and execute only the first
+command. DP_PERSIST and DP_FIT differ only in the aggregate rival forecast.
+The implementation uses a finite terminal rejection value of $-10^9$ dollars;
+executed terminal SOC is independently checked.
+
+### Independent Double DQN
+
+Each owner has its own 17-input, 48-hidden-unit tanh Q network and nine outputs.
+Inputs contain own SOC, current and remaining own wind summaries, current and
+remaining price summaries, time, battery/wind ratio, last inferred rival
+request, and observation age. Cross-owner inputs and weights are separate.
+DQN_NO_RIVAL masks the last-request and age inputs. DQN_HISTORY retains them.
+
+The monetary reward is $R_{it}^{RL}=\pi_t^{RT}\widetilde q_{it}-c_i^{deg}\widetilde d_{it}$
+for the one-hour interval. Training uses
+
+$$
+\bar R_{it}^{RL}=\frac{R_{it}^{RL}-B_{it}^{0}}{100N_i},\qquad
+B_{it}^{0}=\pi_t^{RT}\min\left(W_{it},K\frac{N_i}{\sum_jN_j}\right).
+$$
+
+The baseline $B_{it}^{0}$ is independent of actions. Subtraction and positive
+owner-specific scaling preserve each owner's expected-return ordering.
+The state $o_{it}$ contains the owner's permitted observations. The target is
+
+$$
+y_{it}=\bar R_{it}^{RL}+\gamma(1-\mathrm{done}_t)
+Q_{\theta_i^-}\left(o_{i,t+1},\arg\max_aQ_{\theta_i}(o_{i,t+1},a)\right).
+$$
+
+Minimize Huber loss with threshold 1 on $Q_{\theta_i}(o_{it},a_{it}^{bat})-y_{it}$.
+Transitions contain actual simultaneous training interaction. Each owner updates
+from its own reward and features. Replay does not include validation or
+retrospective-evaluation days.
+
+| Parameter | Value | Source |
+|---|---|---|
+| Hidden units | 48, tanh | Chosen |
+| Replay size | 20,000 joint transitions, separate owner fields | Chosen |
+| Batch size | 64 | Chosen |
+| Optimizer | Adam; learning rate 0.001 | Chosen |
+| Adam coefficients | 0.9, 0.999; denominator epsilon $10^{-8}$ | Chosen |
+| Discount $\gamma$ | 1 | Daily finite horizon |
+| Target refresh | Every 100 gradient updates | Chosen |
+| Warmup | 256 transitions | Chosen |
+| Updates | One per simulated hour | Chosen |
+| Exploration | Linear decay 0.8 to 0.05 | Chosen |
+| Training | 600 randomly sampled March episodes per seed and ablation | Existing training days |
+| Validation | Every 100 episodes, April 1–10 | Existing validation days |
+| Seeds | 6974, 6975, 6976 | Declared |
+| Output | `results/learning_rl/` | Separate study |
+
+Checkpoint selection uses validation system margin. April 11–30 was already
+examined in earlier studies and is now retrospective evaluation. New data are
+required for a fresh holdout estimate.

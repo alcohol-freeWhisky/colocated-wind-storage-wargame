@@ -330,3 +330,17 @@ PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/s
 
 Results: [simultaneous learning](results/learning_simultaneous/report.md) and
 [hidden rival SOC inference](results/learning_soc/report.md).
+
+## Direct control and reinforcement learning
+
+The next comparison adds battery dynamic programming and independent Double DQN.
+Both use nine direct battery commands, simultaneous private decisions, and the
+same physical and terminal constraints. Model selection uses validation days;
+the previously examined April evaluation window is labeled retrospective.
+
+```bash
+PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/scripts/11_rl_dispatch.py
+PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/scripts/12_validate_dispatch.py
+```
+
+[Results, validation ranking, and RL information ablation](results/learning_rl/report.md).
