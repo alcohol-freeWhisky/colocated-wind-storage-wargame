@@ -1,0 +1,167 @@
+{
+  "git_hash": "64c1d5c268dba93c6f5147e67d12dc63a9e788dc",
+  "created_utc": "2026-11-26T09:57:29.027151+00:00",
+  "config_sha256": "4f929a93aa4588ecec072d9e4388fc5c8fc68ed1872290c94341fe730886c90f",
+  "runtime_s": 11.731426665966865,
+  "rows": 96,
+  "stage": "1 simultaneous aggregate learning",
+  "fit_updates": [
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-11",
+      "last_label_day": "2025-03-31",
+      "samples": 44048
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-12",
+      "last_label_day": "2025-04-11",
+      "samples": 45545
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-13",
+      "last_label_day": "2025-04-12",
+      "samples": 47045
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-14",
+      "last_label_day": "2025-04-13",
+      "samples": 48545
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-15",
+      "last_label_day": "2025-04-14",
+      "samples": 49959
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-16",
+      "last_label_day": "2025-04-15",
+      "samples": 51459
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-17",
+      "last_label_day": "2025-04-16",
+      "samples": 52959
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-18",
+      "last_label_day": "2025-04-17",
+      "samples": 54459
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-19",
+      "last_label_day": "2025-04-18",
+      "samples": 55807
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-20",
+      "last_label_day": "2025-04-19",
+      "samples": 57253
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-21",
+      "last_label_day": "2025-04-20",
+      "samples": 58672
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-22",
+      "last_label_day": "2025-04-21",
+      "samples": 59764
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-23",
+      "last_label_day": "2025-04-22",
+      "samples": 61224
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-24",
+      "last_label_day": "2025-04-23",
+      "samples": 62670
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-25",
+      "last_label_day": "2025-04-24",
+      "samples": 64170
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-26",
+      "last_label_day": "2025-04-25",
+      "samples": 65513
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-27",
+      "last_label_day": "2025-04-26",
+      "samples": 67013
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-28",
+      "last_label_day": "2025-04-27",
+      "samples": 68513
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-29",
+      "last_label_day": "2025-04-28",
+      "samples": 70013
+    },
+    {
+      "method": "FIT_ONLINE",
+      "decision_day": "2025-04-30",
+      "last_label_day": "2025-04-29",
+      "samples": 71450
+    }
+  ],
+  "primary_split": "March training; April 1\u201310 validation; April 11\u201330 test",
+  "failed_days": 0,
+  "source_sha256": {
+    "code/wargame/learning/__init__.py": "c65cc3a6d3b63d5b75f59df4a7b737a72c7b8aa81e63fc0446c2464293b56ba3",
+    "code/wargame/learning/experiment.py": "74b571e90d6b0b60511d1dab20e977169ad7ef1dbcc8b5a06733c0c3cbd85015",
+    "code/wargame/learning/simultaneous.py": "26c2616fe99b4ee85b97de0a05c055a097ce995b2d1ba0a1a216747366335f59",
+    "code/wargame/learning/study.py": "95fbf92e85484cb2700103047a26fd1f0fb1b7f2cfe6a945f35f41f0a1a253c2"
+  },
+  "objective": "accepted-export revenue; no overflow penalty",
+  "split": {
+    "training": "2025-03-01/2025-03-31",
+    "validation": "2025-04-01/2025-04-10",
+    "test": "2025-04-11/2025-04-30"
+  },
+  "test_dates": [
+    "2025-04-11",
+    "2025-04-12",
+    "2025-04-13",
+    "2025-04-14",
+    "2025-04-15",
+    "2025-04-16",
+    "2025-04-17",
+    "2025-04-18",
+    "2025-04-19",
+    "2025-04-20",
+    "2025-04-21",
+    "2025-04-22",
+    "2025-04-23",
+    "2025-04-24",
+    "2025-04-25",
+    "2025-04-26",
+    "2025-04-27",
+    "2025-04-28",
+    "2025-04-29",
+    "2025-04-30"
+  ],
+  "seed": 6974
+}
