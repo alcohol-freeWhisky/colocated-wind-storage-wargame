@@ -1,0 +1,36 @@
+{
+  "git_hash": "4ee407a65f41abfaa5a50c6a6d0c1db57ae7ad94",
+  "created_utc": "2026-11-26T10:01:50.972906+00:00",
+  "config_sha256": "2dabc24f2fbe5cb73c5fe2d6e7f997cab2a52f13817293b7e6672ab2a4a03b22",
+  "runtime_s": 39.6806214589742,
+  "rows": 36000,
+  "stage": "2 SOC inference under simultaneous dispatch",
+  "failed_days": 0,
+  "seeds": [
+    6974,
+    6975,
+    6976
+  ],
+  "wind_model": "own wind capacity factor plus bounded AR(1) latent rival deviations",
+  "particle_settings": {
+    "particles": 128,
+    "wind_sigma": 0.15,
+    "observation_sigma": 0.05,
+    "wind_ar": 0.8,
+    "policy_change_probability": 0.05,
+    "seeds": [
+      6974,
+      6975,
+      6976
+    ],
+    "treatments": [
+      "PERSIST",
+      "FIT_FROZEN",
+      "SOC_PRIOR",
+      "SOC_FILTER",
+      "SOC_RESET"
+    ],
+    "output": "results/learning_soc"
+  },
+  "policy_information": "own wind/actions/metering only"
+}

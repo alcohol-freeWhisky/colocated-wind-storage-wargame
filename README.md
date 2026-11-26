@@ -320,3 +320,13 @@ PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/s
 
 See the [unified formulation](docs/model_formulation.md) and
 [simulation results](results/learning/report.md).
+
+The next two studies run separately, in order:
+
+```bash
+PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/scripts/09_simultaneous_learning.py
+PYTHONPATH=code OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 .venv/bin/python code/scripts/10_soc_learning.py
+```
+
+Results: [simultaneous learning](results/learning_simultaneous/report.md) and
+[hidden rival SOC inference](results/learning_soc/report.md).

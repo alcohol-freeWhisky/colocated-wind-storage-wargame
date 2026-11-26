@@ -928,3 +928,121 @@ and treatment-specific observable test histories. Scenario sampling, online
 coefficient refitting, and simultaneous adaptation of all five controllers are
 subsequent comparisons. Results and forecast errors at every lead are in
 [`results/learning/report.md`](../results/learning/report.md).
+
+## 11. Simultaneous aggregate learning
+
+`09_simultaneous_learning.py` runs all five forecasting owners together. At each
+hour, every owner selects its first action from its pre-action history; the five
+actions are executed jointly. No within-hour best-response signal is exchanged.
+The objective, controller and physical equations are those of Section 10.
+
+The simultaneous cases are ZERO, PERSIST, FIT_FROZEN and FIT_ONLINE. Frozen
+coefficients are the training fit selected in the original validation experiment.
+For a test day $\ell$, online coefficients solve (39) using
+
+$$
+\mathcal D_{i,\ell}^{online}=\mathcal D_i^{train}
+\cup\bigcup_{m<\ell,\ m\in\mathcal L_{test}}\mathcal D_{i,m}^{observable}.
+$$
+
+A forecast-origin sample enters this set only after its target interval has
+finished. Daily refitting excludes the current day's observations. Physical SOC
+resets each day; the observable request history and online dataset persist.
+All methods start with the same training/validation pilot history. The results
+use 20 paired test days and 1,000 day-bootstrap replicates with seed 6974.
+
+See [`learning_simultaneous/report.md`](../results/learning_simultaneous/report.md).
+
+## 12. Hidden rival SOC inference
+
+`10_soc_learning.py` runs a separate particle-filter comparison after Section 11.
+Each owner estimates four rivals' SOC and policy types. Own wind supplies a
+correlated wind proxy; private rival wind and SOC enter only evaluator scores.
+
+For particle $m$, rival $j$ and observing owner $i$, the wind model is
+
+$$
+e_{ij,t}^{(m)}=\rho^W e_{ij,t-1}^{(m)}+
+\sigma^W\sqrt{1-(\rho^W)^2}\,\xi_{ij,t}^{(m)},\qquad \xi\sim\mathcal N(0,1),
+$$
+
+$$
+W_{j,t}^{(m)}=N_j\operatorname{clip}\left(W_{it}/N_i+e_{ij,t}^{(m)},0,1.2\right).
+$$
+
+A particle contains $s_{j,t}^{(m)}$, wind error, and a threshold-policy index
+$\theta_j^{(m)}$. The initial SOC is the known daily reset value $0.5E_j$.
+Initial policy indices are uniform over finite threshold controllers from the
+common candidate library. At each interval an index is replaced by another
+uniform draw with probability $p^{change}$. The modeled policy is an approximation
+to adaptive rivals. Within each particle, rival dispatch uses (44)–(47), the
+terminal projection of Section 10, and the common realization map. SOC evolves as
+
+$$
+s_{j,t+1}^{(m)}=s_{jt}^{(m)}+\eta_c\widetilde c_{jt}^{(m)}\Delta t
+-\widetilde d_{jt}^{(m)}\Delta t/\eta_d.
+$$
+
+Current owner actions in the filter update are the owner's actual chosen actions.
+Future forecast rollouts use the particle policy model and the owner's known
+wind trajectory. They return
+
+$$
+\widehat Q_{-i,t\mid h}^{SOC}=\sum_m\omega_{ih}^{(m)}Q_{-i,t\mid h}^{(m)}.
+$$
+
+Let $y_{it}$ be the exact inferred aggregate in (33), $u_{it}=K-q_{it}$ the upper
+bound in (34), and $\sigma_i^{model}=\sigma^{obs}\sum_{j\ne i}N_j$. The likelihood is
+
+$$
+L_{it}^{(m)}\propto
+\begin{cases}
+\exp\left[-(y_{it}-Q_{-i,t}^{(m)})^2/(2(\sigma_i^{model})^2)\right],&\text{exact aggregate},\\
+\Phi\left((u_{it}-Q_{-i,t}^{(m)})/\sigma_i^{model}\right),&\text{upper bound},\\
+1,&\text{no informative own request}.
+\end{cases}
+$$
+
+Here $\Phi$ is the standard-normal distribution function. Its scale represents
+proxy-model error; own metering remains exact.
+
+$$
+\omega_{i,t+1}^{(m)}=
+\frac{\omega_{it}^{(m)}L_{it}^{(m)}}{\sum_n\omega_{it}^{(n)}L_{it}^{(n)}},
+\qquad ESS_{it}=\frac1{\sum_m(\omega_{it}^{(m)})^2}.
+$$
+
+Use systematic resampling when $ESS<M/2$. Resampling selects SOC, wind errors,
+and policy indices together, then resets weights to $1/M$.
+
+| Case | Observation conditioning | Rival SOC carried forward |
+|---|---|---|
+| SOC_PRIOR | No | Model transition |
+| SOC_FILTER | Exact aggregate / bound likelihood | Posterior model transition |
+| SOC_RESET | Same likelihood as SOC_FILTER | Reset to $0.5E_j$ each interval |
+| PERSIST | Aggregate request persistence | No hidden-state model |
+| FIT_FROZEN | Original fitted aggregate predictor | No hidden-state model |
+
+All five owners act simultaneously in each case. The particle forecasts feed the
+same candidate controller, so the contrasts isolate the forecasting model.
+
+| Parameter | Value | Status |
+|---|---|---|
+| Particles per owner $M$ | 128 | Chosen |
+| Wind error $\sigma^W$ | 0.15 in capacity-factor units | Chosen proxy uncertainty |
+| Wind persistence $\rho^W$ | 0.8 | Chosen |
+| Wind proxy clipping | $[0,1.2]$ times $N_j$ | Chosen |
+| Likelihood scale $\sigma^{obs}$ | 0.05 of rival nameplate | Chosen model-error scale |
+| Policy replacement probability | 0.05 per interval | Chosen |
+| Resampling threshold | $M/2$ | Chosen |
+| Seeds | 6974, 6975, 6976 | Declared before testing |
+| Test dates | April 11–30, 2025 | Same 20-day split |
+
+Score individual and aggregate SOC before the current action, excluding the known
+hour-0 state. Compare SOC_FILTER with both SOC_PRIOR and SOC_RESET. Average seeds
+within each operating day before paired economic bootstrap comparisons; calculate
+prediction RMSE from seed-level errors before averaging.
+
+See [`learning_soc/report.md`](../results/learning_soc/report.md). This experiment
+estimates hidden rival storage states; the separate reserve-compliance model in
+Section 7 is unchanged.

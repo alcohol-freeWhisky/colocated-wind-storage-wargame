@@ -1,0 +1,72 @@
+{
+  "git_hash": "4ee407a65f41abfaa5a50c6a6d0c1db57ae7ad94",
+  "created_utc": "2026-11-26T10:01:52.815540+00:00",
+  "config_sha256": "2dabc24f2fbe5cb73c5fe2d6e7f997cab2a52f13817293b7e6672ab2a4a03b22",
+  "runtime_s": 41.75389491696842,
+  "rows": 5,
+  "stage": "2 SOC inference under simultaneous dispatch",
+  "failed_days": 0,
+  "seeds": [
+    6974,
+    6975,
+    6976
+  ],
+  "wind_model": "own wind capacity factor plus bounded AR(1) latent rival deviations",
+  "particle_settings": {
+    "particles": 128,
+    "wind_sigma": 0.15,
+    "observation_sigma": 0.05,
+    "wind_ar": 0.8,
+    "policy_change_probability": 0.05,
+    "seeds": [
+      6974,
+      6975,
+      6976
+    ],
+    "treatments": [
+      "PERSIST",
+      "FIT_FROZEN",
+      "SOC_PRIOR",
+      "SOC_FILTER",
+      "SOC_RESET"
+    ],
+    "output": "results/learning_soc"
+  },
+  "policy_information": "own wind/actions/metering only",
+  "source_sha256": {
+    "code/wargame/learning/__init__.py": "c65cc3a6d3b63d5b75f59df4a7b737a72c7b8aa81e63fc0446c2464293b56ba3",
+    "code/wargame/learning/soc_filter.py": "e07b9496d5f10949a6faa0056bd58de0d1ed6626b0b1f7eebc1007d9642cd343",
+    "code/wargame/learning/experiment.py": "74b571e90d6b0b60511d1dab20e977169ad7ef1dbcc8b5a06733c0c3cbd85015",
+    "code/wargame/learning/simultaneous.py": "26c2616fe99b4ee85b97de0a05c055a097ce995b2d1ba0a1a216747366335f59",
+    "code/wargame/learning/study.py": "95fbf92e85484cb2700103047a26fd1f0fb1b7f2cfe6a945f35f41f0a1a253c2"
+  },
+  "objective": "accepted-export revenue; no overflow penalty",
+  "split": {
+    "training": "2025-03-01/2025-03-31",
+    "validation": "2025-04-01/2025-04-10",
+    "test": "2025-04-11/2025-04-30"
+  },
+  "test_dates": [
+    "2025-04-11",
+    "2025-04-12",
+    "2025-04-13",
+    "2025-04-14",
+    "2025-04-15",
+    "2025-04-16",
+    "2025-04-17",
+    "2025-04-18",
+    "2025-04-19",
+    "2025-04-20",
+    "2025-04-21",
+    "2025-04-22",
+    "2025-04-23",
+    "2025-04-24",
+    "2025-04-25",
+    "2025-04-26",
+    "2025-04-27",
+    "2025-04-28",
+    "2025-04-29",
+    "2025-04-30"
+  ],
+  "seed": 6974
+}
